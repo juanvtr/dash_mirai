@@ -352,6 +352,8 @@ def _render_mailing_section(secao_dict):
 # ══════════════════════════════════════════════════════════════════════
 
 tab_names = []
+if df_deals is not None:
+    tab_names += ["👥 Performance Comercial"]
 if df_mapa is not None:
     tab_names += ["🗺️ Mapa Parque", "🎯 Raio X", "📈 Segmentação"]
 if df_deals is not None:
@@ -363,9 +365,6 @@ if df_mapa is not None:
 
 tabs = st.tabs(tab_names)
 tab_idx = 0
-
-if df_deals is not None:
-    tab_names += ["👥 Performance Comercial"]
 
 # ══════════════════════════════════════════════════════════════════════
 # TAB: PERFORMANCE COMERCIAL X
