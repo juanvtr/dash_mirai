@@ -191,40 +191,43 @@ def fetch_users(webhook_url, status_callback=None):
 
 def process_webhook_deals(df_raw, df_users=None):
     """
-    Processa deals crus do webhook para o formato padrao do dashboard.
-    
-    Returns:
-        DataFrame com CNPJ_NORM, DEAL_ABERTO, NOME_NORM, etc.
+    Processa deals crus do webhook Bitrix.
+    Formato real: ID, TITLE, STAGE_ID, CATEGORY_ID, ASSIGNED_BY_ID,
+    COMPANY_ID, CONTACT_ID, OPPORTUNITY, CLOSED, DATE_CREATE, etc.
     """
     if df_raw.empty:
         return pd.DataFrame()
-    
+
     df = df_raw.copy()
-    
-    # Deal aberto
+
+    # Deal aberto (CLOSED="N")
     df["DEAL_ABERTO"] = df["CLOSED"].astype(str).str.upper() != "Y"
-    
+
     # Renda/valor
     df["RENDA"] = pd.to_numeric(df.get("OPPORTUNITY", 0), errors="coerce").fillna(0)
-    
+
     # Datas
     for col in ["DATE_CREATE", "DATE_MODIFY"]:
         if col in df.columns:
             df[col] = pd.to_datetime(df[col], errors="coerce")
-    
-    # Vendedor
+
+    # Vendedor (ASSIGNED_BY_ID -> nome)
     if df_users is not None and not df_users.empty and "ASSIGNED_BY_ID" in df.columns:
         user_map = df_users.set_index("USER_ID")["NOME_COMPLETO"].to_dict()
-        df["RESPONSAVEL"] = df["ASSIGNED_BY_ID"].astype(str).map(user_map).fillna("Desconhecido")
+        df["RESPONSAVEL"] = df["ASSIGNED_BY_ID"].astype(str).map(user_map).fillna("ID:" + df["ASSIGNED_BY_ID"].astype(str))
     else:
-        df["RESPONSAVEL"] = "N/A"
-    
-    # CNPJ e Nome serao preenchidos depois do fetch de companies
-    df["CNPJ_NORM"] = ""
+        df["RESPONSAVEL"] = df.get("ASSIGNED_BY_ID", "N/A").astype(str)
+
+    # Nome do deal = TITLE (ex: "Adriana Costa da Silva", "Rosmar Gomes...")
     df["NOME_NORM"] = df.get("TITLE", "").astype(str).str.upper().str.strip()
-    # Limpar prefixos numericos do titulo
+    # Limpar CNPJs e codigos do titulo
     df["NOME_NORM"] = df["NOME_NORM"].str.replace(r"^\d+\s+", "", regex=True)
-    
+    df["NOME_NORM"] = df["NOME_NORM"].str.replace(r"\s*/\s*\d[\d./\-]*\s*", " ", regex=True).str.strip()
+
+    # CNPJ - webhook nao traz direto, usar COMPANY_ID pra buscar depois
+    df["CNPJ_NORM"] = ""
+    df["COMPANY_ID"] = df.get("COMPANY_ID", "0").astype(str)
+
     return df
 
 

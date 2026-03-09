@@ -127,13 +127,10 @@ with st.sidebar:
 
     st.markdown(sidebar_line(), unsafe_allow_html=True)
     st.markdown('<div style="font-size:0.72rem;font-weight:600;color:var(--tx3);text-transform:uppercase;'
-                'letter-spacing:0.06em;margin-bottom:4px;">Deals Bitrix</div>', unsafe_allow_html=True)
-    uploaded_deals = st.file_uploader("Deals", type=["csv"], key="up_deals",
-                                      help="Export Deals Bitrix CSV", label_visibility="collapsed")
+                'letter-spacing:0.06em;margin-bottom:4px;">Bitrix24</div>', unsafe_allow_html=True)
 
-    # Webhook sync button
+    # Webhook sync button (unico meio de carregar deals)
     if HAS_WEBHOOK:
-        # Tenta secrets primeiro, depois banco
         webhook_url = ""
         try:
             webhook_url = st.secrets.get("BITRIX_WEBHOOK_URL", "")
@@ -143,7 +140,7 @@ with st.sidebar:
             webhook_url = db.get_config("bitrix_webhook_url", "")
 
         if webhook_url:
-            if st.button("Atualizar Deals via Webhook", key="sync_wh", type="secondary"):
+            if st.button("Sincronizar Deals", key="sync_wh", type="secondary"):
                 with st.spinner("Sincronizando com Bitrix24..."):
                     try:
                         df_users_wh = fetch_users(webhook_url)
@@ -152,19 +149,19 @@ with st.sidebar:
                             df_proc = process_webhook_deals(df_raw, df_users_wh)
                             count = db.upsert_deals(df_proc)
                             st.session_state["webhook_synced"] = True
-                            st.success("{:,} deals sincronizados".format(count))
+                            st.success("{:,} deals".format(count))
                         else:
                             st.warning("Nenhum deal retornado")
                     except Exception as e:
-                        st.error("Erro: {}".format(str(e)))
+                        st.error(str(e)[:100])
         else:
-            st.markdown('<div style="font-size:0.7rem;color:var(--tx3);">Webhook nao configurado</div>',
+            st.markdown('<div style="font-size:0.7rem;color:var(--tx3);">Configure na aba Config</div>',
                        unsafe_allow_html=True)
 
     # Status
     m_ok = uploaded_mapa is not None or "df_mapa" in st.session_state
     p_ok = uploaded_movel is not None or "df_movel" in st.session_state
-    d_ok = uploaded_deals is not None or "df_deals" in st.session_state
+    d_ok = st.session_state.get("webhook_synced", False) or db.status().get("total_deals", 0) > 0
     st.markdown(
         '<div style="display:flex;gap:10px;padding:2px 0;font-size:0.72rem;color:var(--tx3);">'
         '<span style="display:flex;align-items:center;gap:4px;">'
@@ -223,18 +220,8 @@ if df_mapa is not None and df_movel_agg is not None:
             st.session_state["df_mapa"] = df_mapa
             st.session_state["cruzamento_done"] = True
 
-# Deals Bitrix
-if uploaded_deals is not None:
-    if "df_deals" not in st.session_state or st.session_state.get("deals_name") != uploaded_deals.name:
-        with st.spinner("Processando Deals..."):
-            st.session_state["df_deals"] = processar_deals(uploaded_deals)
-            cnpjs, nomes = get_cnpjs_em_tratativa(st.session_state["df_deals"])
-            st.session_state["cnpjs_tratativa"] = cnpjs
-            st.session_state["nomes_tratativa"] = nomes
-            st.session_state["deals_name"] = uploaded_deals.name
-df_deals = st.session_state.get("df_deals")
-cnpjs_tratativa = st.session_state.get("cnpjs_tratativa", set())
-nomes_tratativa = st.session_state.get("nomes_tratativa", set())
+# Deals - via webhook/banco (sem upload manual)
+cnpjs_tratativa, nomes_tratativa = db.get_cnpjs_em_tratativa()
 
 
 # ===== WELCOME =====
