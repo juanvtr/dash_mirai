@@ -1,9 +1,5 @@
 # -*- coding: utf-8 -*-
-"""
-Mirai Insights v4.0 - Dashboard B2B Vivo
-Paleta derivada da logo Mirai Telecom (magenta/roxo/ciano).
-Logos: logo_icon.png (favicon + sidebar) / logo_full.png (welcome).
-"""
+"""Mirai Insights v4 - Sidebar fixa, design ultra-limpo."""
 
 import streamlit as st
 import pandas as pd
@@ -11,49 +7,46 @@ import base64
 import os
 from datetime import datetime
 from io import BytesIO
-from collections import OrderedDict
 
-from config import APP_TITLE, APP_VERSION, MAILING_CORES, SEGMENTOS_DESC
+from config import APP_TITLE, MAILING_CORES, SEGMENTOS_DESC
 from styles import (
     get_css, breadcrumb, page_header, kpi_card, kpi_grid,
     section_title, divider, divider_grad, info_box, mailing_card_html,
-    segment_card, footer_html,
+    segment_card, sidebar_line, footer_html,
 )
 from data_processing import (
-    processar_mapa_parque, processar_parque_movel, processar_users,
+    processar_mapa_parque, processar_parque_movel,
     agregar_parque_movel_por_cnpj, cruzar_mapa_com_movel,
     gerar_mailing_customizado, gerar_todos_mailings,
+    processar_deals, get_cnpjs_em_tratativa, filtrar_mailing_sem_deals,
 )
 from charts import (
     chart_semaforo, chart_segmentacao, chart_categoria_m, chart_posse,
     chart_raio_x, chart_heatmap_segmento_catm, chart_fidelizacao,
     chart_faixa_m_linhas, chart_fidelizacao_linhas, chart_serasa_linhas,
-    chart_blindagem, chart_planos_top, chart_m_por_cliente,
-    chart_regua_m,
+    chart_blindagem, chart_planos_top, chart_m_por_cliente, chart_regua_m,
 )
+from db import MiraiDB
+
+# Tenta importar webhook (pode falhar se requests nao instalado)
+try:
+    from bitrix_webhook import fetch_deals, fetch_users, process_webhook_deals, test_webhook
+    HAS_WEBHOOK = True
+except ImportError:
+    HAS_WEBHOOK = False
 
 
-# ==========================================================
-# HELPERS
-# ==========================================================
+# ===== HELPERS =====
 
 def _logo_b64(filename):
-    """Carrega logo como base64 para usar em HTML."""
-    # Tenta varios caminhos possiveis
-    for path in [
-        os.path.join(os.path.dirname(__file__), filename),
-        filename,
-        os.path.join("/app", filename),
-    ]:
-        if os.path.exists(path):
-            with open(path, "rb") as f:
+    for p in [os.path.join(os.path.dirname(__file__), filename), filename]:
+        if os.path.exists(p):
+            with open(p, "rb") as f:
                 return base64.b64encode(f.read()).decode()
     return ""
 
-
 def to_csv(df):
     return df.to_csv(sep=";", index=False, encoding="utf-8-sig").encode("utf-8-sig")
-
 
 def to_excel(d):
     buf = BytesIO()
@@ -63,9 +56,7 @@ def to_excel(d):
     return buf.getvalue()
 
 
-# ==========================================================
-# PAGE CONFIG (usa logo como favicon)
-# ==========================================================
+# ===== CONFIG =====
 
 st.set_page_config(
     page_title="Mirai Insights",
@@ -74,120 +65,138 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-
-# ==========================================================
-# THEME
-# ==========================================================
-
 if "theme" not in st.session_state:
     st.session_state["theme"] = "dark"
-
 theme = st.session_state["theme"]
 st.markdown(get_css(theme), unsafe_allow_html=True)
 
+# Init database (Supabase ou SQLite)
+@st.cache_resource
+def init_db():
+    # Streamlit Cloud usa st.secrets, local usa os.environ ou .env
+    supa_url = None
+    supa_key = None
+    try:
+        supa_url = st.secrets.get("SUPABASE_URL")
+        supa_key = st.secrets.get("SUPABASE_KEY")
+    except:
+        pass
+    if not supa_url:
+        supa_url = os.environ.get("SUPABASE_URL")
+    if not supa_key:
+        supa_key = os.environ.get("SUPABASE_KEY")
+    return MiraiDB(supabase_url=supa_url, supabase_key=supa_key)
 
-# ==========================================================
-# SIDEBAR
-# ==========================================================
+db = init_db()
 
-logo_icon_b64 = _logo_b64("logo_icon.png")
+
+# ===== SIDEBAR =====
+
+logo_b64 = _logo_b64("logo_icon.png")
 
 with st.sidebar:
-    # Logo + Theme toggle
-    if logo_icon_b64:
+    # Logo pequena + nome - sem fundo, sem versao
+    if logo_b64:
         st.markdown(
-            '<div style="display:flex;align-items:center;gap:12px;padding:12px 0 6px;">'
-            '<img src="data:image/png;base64,{img}" style="width:38px;height:38px;border-radius:8px;background-color:transparent;" />'
-            '<div>'
-            '<div style="font-size:1.15rem;font-weight:700;letter-spacing:-0.02em;">MIRAI INSIGHTS</div>'
-            '<div style="font-size:0.68rem;color:{tx3};letter-spacing:0.04em;">v{ver}</div>'
-            '</div>'
-            '</div>'.format(
-                img=logo_icon_b64,
-                c1="#E879F9" if theme == "dark" else "#D946EF",
-                c2="#A78BFA" if theme == "dark" else "#8B5CF6",
-                c3="#22D3EE" if theme == "dark" else "#06B6D4",
-                tx3="#5C586E" if theme == "dark" else "#A0A0AB",
-                ver=APP_VERSION,
-            ), unsafe_allow_html=True)
+            '<div style="display:flex;align-items:center;gap:10px;padding:8px 0 4px;">'
+            '<img src="data:image/png;base64,{img}" style="width:28px;height:28px;" />'
+            '<span style="font-size:0.95rem;font-weight:600;color:var(--tx);">Mirai Insights</span>'
+            '</div>'.format(img=logo_b64), unsafe_allow_html=True)
     else:
         st.markdown(
-            '<div style="padding:12px 0 6px;">'
-            '<div style="font-size:1.15rem;font-weight:700;'
-            'background:linear-gradient(135deg,#D946EF,#8B5CF6,#06B6D4);'
-            '-webkit-background-clip:text;-webkit-text-fill-color:transparent;">MIRAI INSIGHTS</div>'
-            '<div style="font-size:0.68rem;color:#A0A0AB;">v{}</div>'
-            '</div>'.format(APP_VERSION), unsafe_allow_html=True)
+            '<div style="padding:8px 0 4px;font-size:0.95rem;font-weight:600;color:var(--tx);">'
+            'Mirai Insights</div>', unsafe_allow_html=True)
 
-    # Theme toggle
-    tc1, tc2 = st.columns([3, 1])
-    with tc2:
-        icon = "Light" if theme == "dark" else "Dark"
-        if st.button(icon, key="theme_btn", help="Alternar tema"):
-            st.session_state["theme"] = "light" if theme == "dark" else "dark"
-            st.rerun()
+    st.markdown(sidebar_line(), unsafe_allow_html=True)
 
-    st.markdown('<hr style="margin:8px 0;border-color:{}">'
-                .format("#252533" if theme == "dark" else "#E9E5F0"),
-                unsafe_allow_html=True)
+    # Theme toggle - discreto
+    if st.button("Light" if theme == "dark" else "Dark", key="t", help="Alternar tema", type="secondary"):
+        st.session_state["theme"] = "light" if theme == "dark" else "dark"
+        st.rerun()
 
-    # -- Data Sources --
-    with st.expander("Fontes de Dados", expanded=True):
-        uploaded_mapa = st.file_uploader(
-            "Mapa Parque", type=["csv"], key="up_mapa",
-            help="RelatorioInfoB2B_MapaParqueVisaoCliente_*.csv")
-        uploaded_movel = st.file_uploader(
-            "Parque Movel", type=["csv"], key="up_movel",
-            help="RelatorioInfoB2B_ParqueMovel_*.csv")
+    st.markdown(sidebar_line(), unsafe_allow_html=True)
 
-    # Status dots
+    # Fontes de dados
+    st.markdown('<div style="font-size:0.72rem;font-weight:600;color:var(--tx3);text-transform:uppercase;'
+                'letter-spacing:0.06em;margin-bottom:4px;">Fontes de Dados</div>', unsafe_allow_html=True)
+
+    uploaded_mapa = st.file_uploader("Mapa Parque", type=["csv"], key="up_mapa",
+                                     help="MapaParqueVisaoCliente_*.csv", label_visibility="collapsed")
+    uploaded_movel = st.file_uploader("Parque Movel", type=["csv"], key="up_movel",
+                                      help="ParqueMovel_*.csv", label_visibility="collapsed")
+
+    st.markdown(sidebar_line(), unsafe_allow_html=True)
+    st.markdown('<div style="font-size:0.72rem;font-weight:600;color:var(--tx3);text-transform:uppercase;'
+                'letter-spacing:0.06em;margin-bottom:4px;">Deals Bitrix</div>', unsafe_allow_html=True)
+    uploaded_deals = st.file_uploader("Deals", type=["csv"], key="up_deals",
+                                      help="Export Deals Bitrix CSV", label_visibility="collapsed")
+
+    # Webhook sync button
+    if HAS_WEBHOOK:
+        # Tenta secrets primeiro, depois banco
+        webhook_url = ""
+        try:
+            webhook_url = st.secrets.get("BITRIX_WEBHOOK_URL", "")
+        except:
+            pass
+        if not webhook_url:
+            webhook_url = db.get_config("bitrix_webhook_url", "")
+
+        if webhook_url:
+            if st.button("Atualizar Deals via Webhook", key="sync_wh", type="secondary"):
+                with st.spinner("Sincronizando com Bitrix24..."):
+                    try:
+                        df_users_wh = fetch_users(webhook_url)
+                        df_raw = fetch_deals(webhook_url)
+                        if not df_raw.empty:
+                            df_proc = process_webhook_deals(df_raw, df_users_wh)
+                            count = db.upsert_deals(df_proc)
+                            st.session_state["webhook_synced"] = True
+                            st.success("{:,} deals sincronizados".format(count))
+                        else:
+                            st.warning("Nenhum deal retornado")
+                    except Exception as e:
+                        st.error("Erro: {}".format(str(e)))
+        else:
+            st.markdown('<div style="font-size:0.7rem;color:var(--tx3);">Webhook nao configurado</div>',
+                       unsafe_allow_html=True)
+
+    # Status
     m_ok = uploaded_mapa is not None or "df_mapa" in st.session_state
     p_ok = uploaded_movel is not None or "df_movel" in st.session_state
-
-    dot_on = "#22C55E" if theme == "dark" else "#16A34A"
-    dot_off = "#EAB308" if theme == "dark" else "#CA8A04"
+    d_ok = uploaded_deals is not None or "df_deals" in st.session_state
     st.markdown(
-        '<div style="display:flex;gap:12px;padding:4px 0 8px;font-size:0.76rem;">'
-        '<span style="display:flex;align-items:center;gap:5px;">'
-        '<span style="width:7px;height:7px;border-radius:50%;background:{mc};display:inline-block;"></span>'
-        '<span style="color:{mtx};">Mapa</span></span>'
-        '<span style="display:flex;align-items:center;gap:5px;">'
-        '<span style="width:7px;height:7px;border-radius:50%;background:{pc};display:inline-block;"></span>'
-        '<span style="color:{ptx};">Movel</span></span>'
+        '<div style="display:flex;gap:10px;padding:2px 0;font-size:0.72rem;color:var(--tx3);">'
+        '<span style="display:flex;align-items:center;gap:4px;">'
+        '<span style="width:5px;height:5px;border-radius:50%;background:{mc};"></span>Mapa</span>'
+        '<span style="display:flex;align-items:center;gap:4px;">'
+        '<span style="width:5px;height:5px;border-radius:50%;background:{pc};"></span>Movel</span>'
+        '<span style="display:flex;align-items:center;gap:4px;">'
+        '<span style="width:5px;height:5px;border-radius:50%;background:{dc};"></span>Deals</span>'
         '</div>'.format(
-            mc=dot_on if m_ok else dot_off,
-            mtx="#A5A1BC" if theme == "dark" else "#64607D",
-            pc=dot_on if p_ok else dot_off,
-            ptx="#A5A1BC" if theme == "dark" else "#64607D",
+            mc="var(--success)" if m_ok else "var(--tx3)",
+            pc="var(--success)" if p_ok else "var(--tx3)",
+            dc="var(--success)" if d_ok else "var(--tx3)",
         ), unsafe_allow_html=True)
 
-    # -- Filters --
+    # Filtros
     if "df_mapa" in st.session_state and st.session_state["df_mapa"] is not None:
-        st.markdown('<hr style="margin:8px 0;border-color:{}">'
-                    .format("#252533" if theme == "dark" else "#E9E5F0"),
-                    unsafe_allow_html=True)
+        st.markdown(sidebar_line(), unsafe_allow_html=True)
+        st.markdown('<div style="font-size:0.72rem;font-weight:600;color:var(--tx3);text-transform:uppercase;'
+                    'letter-spacing:0.06em;margin-bottom:4px;">Filtros</div>', unsafe_allow_html=True)
 
-        with st.expander("Filtros", expanded=False):
-            df_ref = st.session_state["df_mapa"]
-            seg_filter = st.selectbox(
-                "Segmento", ["Todos"] + sorted(df_ref["SEGMENTO"].dropna().unique().tolist()),
-                key="f_seg")
-            catm_col = "CATEGORIA_M_REAL" if "CATEGORIA_M_REAL" in df_ref.columns else "CATEGORIA_M"
-            cat_filter = st.selectbox(
-                "Categoria M", ["Todos"] + sorted(df_ref[catm_col].dropna().unique().tolist()),
-                key="f_cat")
-            sem_filter = st.selectbox(
-                "Semaforo", ["Todos"] + sorted(df_ref["SEMAFORO"].dropna().unique().tolist()),
-                key="f_sem")
-            mancha_filter = st.checkbox("Apenas mancha FTTH", key="f_mancha")
+        df_ref = st.session_state["df_mapa"]
+        seg_filter = st.selectbox("Segmento", ["Todos"] + sorted(df_ref["SEGMENTO"].dropna().unique().tolist()), key="f_seg")
+        catm_col = "CATEGORIA_M_REAL" if "CATEGORIA_M_REAL" in df_ref.columns else "CATEGORIA_M"
+        cat_filter = st.selectbox("Categoria M", ["Todos"] + sorted(df_ref[catm_col].dropna().unique().tolist()), key="f_cat")
+        sem_filter = st.selectbox("Semaforo", ["Todos"] + sorted(df_ref["SEMAFORO"].dropna().unique().tolist()), key="f_sem")
+        mancha_filter = st.checkbox("Apenas mancha FTTH", key="f_mancha")
     else:
         seg_filter = cat_filter = sem_filter = "Todos"
         mancha_filter = False
 
 
-# ==========================================================
-# DATA PROCESSING
-# ==========================================================
+# ===== DATA =====
 
 if uploaded_mapa is not None:
     if "df_mapa" not in st.session_state or st.session_state.get("mapa_name") != uploaded_mapa.name:
@@ -214,42 +223,46 @@ if df_mapa is not None and df_movel_agg is not None:
             st.session_state["df_mapa"] = df_mapa
             st.session_state["cruzamento_done"] = True
 
+# Deals Bitrix
+if uploaded_deals is not None:
+    if "df_deals" not in st.session_state or st.session_state.get("deals_name") != uploaded_deals.name:
+        with st.spinner("Processando Deals..."):
+            st.session_state["df_deals"] = processar_deals(uploaded_deals)
+            cnpjs, nomes = get_cnpjs_em_tratativa(st.session_state["df_deals"])
+            st.session_state["cnpjs_tratativa"] = cnpjs
+            st.session_state["nomes_tratativa"] = nomes
+            st.session_state["deals_name"] = uploaded_deals.name
+df_deals = st.session_state.get("df_deals")
+cnpjs_tratativa = st.session_state.get("cnpjs_tratativa", set())
+nomes_tratativa = st.session_state.get("nomes_tratativa", set())
 
-# ==========================================================
-# WELCOME
-# ==========================================================
+
+# ===== WELCOME =====
 
 if df_mapa is None and df_movel is None:
-    logo_full_b64 = _logo_b64("logo_full.png")
-    if logo_full_b64:
+    logo_full = _logo_b64("logo_full.png")
+    if logo_full:
         st.markdown(
-            '<div style="text-align:center;padding:40px 24px 0;">'
-            '<img src="data:image/png;base64,{}" style="width:220px;margin-bottom:20px;background-color:transparent;" />'
-            '</div>'.format(logo_full_b64), unsafe_allow_html=True)
-
+            '<div style="text-align:center;padding:50px 24px 16px;">'
+            '<img src="data:image/png;base64,{}" style="width:180px;opacity:0.85;" />'
+            '</div>'.format(logo_full), unsafe_allow_html=True)
     st.markdown(
-        '<div style="text-align:center;padding:12px 24px 48px;">'
-        '<h2 style="font-size:2.2rem;font-weight:700;margin-bottom:10px;letter-spacing:-0.03em;">Mirai Insights</h2>'
-        '<p style="color:{tx2};font-size:0.95rem;max-width:480px;margin:0 auto;line-height:1.6;">'
-        'Carregue o <strong style="color:{tx};">Mapa Parque</strong> e o '
-        '<strong style="color:{tx};">Parque Movel</strong> na barra lateral para iniciar.</p>'
-        '<div class="cg" style="max-width:460px;margin:28px auto 0;">'
-        '{card1}{card2}'
-        '</div></div>'.format(
+        '<div style="text-align:center;padding:8px 24px 40px;">'
+        '<h2 style="font-size:1.8rem;font-weight:700;margin-bottom:8px;'
+        'background:linear-gradient(135deg,{c1},{c2},{c3});'
+        '-webkit-background-clip:text;-webkit-text-fill-color:transparent;">Mirai Insights</h2>'
+        '<p style="color:var(--tx2);font-size:0.9rem;max-width:440px;margin:0 auto;line-height:1.5;">'
+        'Carregue o <strong style="color:var(--tx);">Mapa Parque</strong> e o '
+        '<strong style="color:var(--tx);">Parque Movel</strong> na barra lateral.</p>'
+        '</div>'.format(
             c1="#E879F9" if theme == "dark" else "#D946EF",
             c2="#A78BFA" if theme == "dark" else "#8B5CF6",
             c3="#22D3EE" if theme == "dark" else "#06B6D4",
-            tx2="#A5A1BC" if theme == "dark" else "#64607D",
-            tx="#F5F3FF" if theme == "dark" else "#1A1A2E",
-            card1=segment_card("Passo 1", "Mapa Parque", "Visao consolidada por CNPJ."),
-            card2=segment_card("Passo 2", "Parque Movel", "Cada linha com M real."),
         ), unsafe_allow_html=True)
     st.stop()
 
 
-# ==========================================================
-# APPLY FILTERS
-# ==========================================================
+# ===== FILTERS =====
 
 df_f = df_mapa.copy() if df_mapa is not None else None
 if df_f is not None:
@@ -264,9 +277,7 @@ if df_f is not None:
         df_f = df_f[df_f["NA_MANCHA"]]
 
 
-# ==========================================================
-# TABS
-# ==========================================================
+# ===== TABS =====
 
 tab_names = []
 if df_mapa is not None:
@@ -274,730 +285,583 @@ if df_mapa is not None:
 if df_movel is not None:
     tab_names += ["Parque Movel", "Regua M"]
 if df_mapa is not None:
-    tab_names += ["Explorar Cliente", "Mailings", "Dados Brutos", "Metodologia"]
+    tab_names += ["Explorar Cliente", "Mailings", "Vendedores", "Dados Brutos", "Metodologia", "Config"]
 
 tabs = st.tabs(tab_names)
 ti = 0
 
 
-# ==========================================================
-# TAB: MAPA PARQUE
-# ==========================================================
+# ===== MAPA PARQUE =====
 
 if df_mapa is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Carteira", "Mapa Parque"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Visao Geral da Carteira",
-            "Analise consolidada por CNPJ com classificacao comercial e indicadores de saude."
-        ), unsafe_allow_html=True)
+        st.markdown(page_header("Visao Geral da Carteira",
+            "Analise consolidada por CNPJ com classificacao comercial e indicadores."), unsafe_allow_html=True)
 
         cards = [
             kpi_card("Total Clientes", "{:,}".format(len(df_f)), accent=True),
             kpi_card("Linhas Moveis", "{:,}".format(df_f["QTD_MOVEL"].sum())),
             kpi_card("Banda Larga", "{:,}".format(df_f["QTD_BL"].sum())),
             kpi_card("Vivo Tech", "{:,}".format(df_f["QTD_VTECH"].sum())),
-            kpi_card("FTTH", "{:.1f}%".format(df_f["NA_MANCHA"].sum() / max(len(df_f), 1) * 100)),
+            kpi_card("FTTH", "{:.1f}%".format(df_f["NA_MANCHA"].sum()/max(len(df_f),1)*100)),
             kpi_card("Big Deals", "{:,}".format(df_f["BIG_DEAL"].sum())),
         ]
         st.markdown(kpi_grid(cards), unsafe_allow_html=True)
 
         if "PM_QTD_LINHAS" in df_f.columns:
-            pm_cards = [
+            st.markdown(kpi_grid([
                 kpi_card("Linhas PM", "{:,}".format(int(df_f["PM_QTD_LINHAS"].sum())), accent=True),
                 kpi_card("Fat. Medio", "R$ {:,.0f}".format(df_f["PM_FAT_TOTAL"].sum())),
                 kpi_card("Linhas M17+", "{:,}".format(int(df_f["PM_LINHAS_M17_PLUS"].sum()))),
                 kpi_card("% Fidelizado", "{:.1f}%".format(
-                    df_f["PM_QTD_FIDELIZADAS"].sum() / max(df_f["PM_QTD_LINHAS"].sum(), 1) * 100)),
-            ]
-            st.markdown(kpi_grid(pm_cards), unsafe_allow_html=True)
+                    df_f["PM_QTD_FIDELIZADAS"].sum()/max(df_f["PM_QTD_LINHAS"].sum(),1)*100)),
+            ]), unsafe_allow_html=True)
 
         st.markdown(divider(), unsafe_allow_html=True)
-
         c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(chart_categoria_m(df_f, theme), use_container_width=True, config={"displayModeBar": False})
-        with c2:
-            st.plotly_chart(chart_semaforo(df_f, theme), use_container_width=True, config={"displayModeBar": False})
+        with c1: st.plotly_chart(chart_categoria_m(df_f, theme), use_container_width=True, config={"displayModeBar": False})
+        with c2: st.plotly_chart(chart_semaforo(df_f, theme), use_container_width=True, config={"displayModeBar": False})
         c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(chart_segmentacao(df_f, theme), use_container_width=True, config={"displayModeBar": False})
-        with c2:
-            st.plotly_chart(chart_posse(df_f, theme), use_container_width=True, config={"displayModeBar": False})
-
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+        with c1: st.plotly_chart(chart_segmentacao(df_f, theme), use_container_width=True, config={"displayModeBar": False})
+        with c2: st.plotly_chart(chart_posse(df_f, theme), use_container_width=True, config={"displayModeBar": False})
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: RAIO X
-# ==========================================================
+# ===== RAIO X =====
 
 if df_mapa is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Carteira", "Raio X"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Raio X da Carteira",
-            "Indicadores cruzados do PDF Raio X Carteira Mirai Telecom."
-        ), unsafe_allow_html=True)
-
+        st.markdown(page_header("Raio X da Carteira", "Indicadores cruzados do PDF Raio X."), unsafe_allow_html=True)
         st.plotly_chart(chart_raio_x(df_f, theme), use_container_width=True, config={"displayModeBar": False})
         st.markdown(divider(), unsafe_allow_html=True)
         st.plotly_chart(chart_heatmap_segmento_catm(df_f, theme), use_container_width=True, config={"displayModeBar": False})
-
         st.markdown(divider(), unsafe_allow_html=True)
-        st.markdown(section_title("Fidelizacao"), unsafe_allow_html=True)
         c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(chart_fidelizacao(df_f, theme), use_container_width=True, config={"displayModeBar": False})
+        with c1: st.plotly_chart(chart_fidelizacao(df_f, theme), use_container_width=True, config={"displayModeBar": False})
         with c2:
-            seg_data = []
-            for seg in df_f["SEGMENTO"].value_counts().index:
-                desc = SEGMENTOS_DESC.get(seg, "")
-                cnt = (df_f["SEGMENTO"] == seg).sum()
-                seg_data.append({"Segmento": seg, "Clientes": cnt, "Descricao": desc})
-            if seg_data:
-                st.dataframe(pd.DataFrame(seg_data), use_container_width=True, hide_index=True, height=300)
-
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+            seg_data = [{"Segmento": s, "Clientes": (df_f["SEGMENTO"]==s).sum(), "Desc": SEGMENTOS_DESC.get(s,"")}
+                       for s in df_f["SEGMENTO"].value_counts().index]
+            if seg_data: st.dataframe(pd.DataFrame(seg_data), use_container_width=True, hide_index=True, height=300)
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: SEGMENTACAO
-# ==========================================================
+# ===== SEGMENTACAO =====
 
 if df_mapa is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Carteira", "Segmentacao"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Segmentacao Comercial",
-            "Classificacao por tipo de posse e estrategia comercial recomendada."
-        ), unsafe_allow_html=True)
-
-        cards_html = []
-        for seg in df_f["SEGMENTO"].value_counts().index:
-            n = (df_f["SEGMENTO"] == seg).sum()
-            desc = SEGMENTOS_DESC.get(seg, "")
-            cards_html.append(segment_card("Segmento", seg, desc, "{:,} clientes".format(n)))
+        st.markdown(page_header("Segmentacao Comercial", "Classificacao por posse e estrategia."), unsafe_allow_html=True)
+        cards_html = [segment_card("Segmento", seg, SEGMENTOS_DESC.get(seg,""), "{:,} clientes".format((df_f["SEGMENTO"]==seg).sum()))
+                     for seg in df_f["SEGMENTO"].value_counts().index]
         st.markdown('<div class="cg">{}</div>'.format("".join(cards_html)), unsafe_allow_html=True)
-
         st.markdown(divider(), unsafe_allow_html=True)
-        st.markdown(section_title("Detalhamento"), unsafe_allow_html=True)
-        seg_choice = st.selectbox("Segmento", df_f["SEGMENTO"].unique().tolist(), key="seg_detail")
+        seg_choice = st.selectbox("Segmento", df_f["SEGMENTO"].unique().tolist(), key="seg_d")
         df_seg = df_f[df_f["SEGMENTO"] == seg_choice]
-
-        seg_cards = [
+        st.markdown(kpi_grid([
             kpi_card("Clientes", "{:,}".format(len(df_seg)), accent=True),
-            kpi_card("Linhas Moveis", "{:,}".format(df_seg["QTD_MOVEL"].sum())),
-            kpi_card("Banda Larga", "{:,}".format(df_seg["QTD_BL"].sum())),
-            kpi_card("Big Deals", "{:,}".format(df_seg["BIG_DEAL"].sum())),
-        ]
-        st.markdown(kpi_grid(seg_cards), unsafe_allow_html=True)
-
-        cols_show = ["NOME_CLIENTE", "NR_CNPJ", "POSSE_SIMPL", "QTD_MOVEL", "QTD_BL", "SEMAFORO", "BIG_DEAL"]
-        avail = [c for c in cols_show if c in df_seg.columns]
-        df_show = df_seg[avail].copy()
-        if "BIG_DEAL" in df_show.columns:
-            df_show["BIG_DEAL"] = df_show["BIG_DEAL"].map({True: "Sim", False: ""})
-        st.dataframe(df_show.head(100), use_container_width=True, hide_index=True, height=400)
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+            kpi_card("Moveis", "{:,}".format(df_seg["QTD_MOVEL"].sum())),
+            kpi_card("BL", "{:,}".format(df_seg["QTD_BL"].sum())),
+        ]), unsafe_allow_html=True)
+        cols = ["NOME_CLIENTE","NR_CNPJ","POSSE_SIMPL","QTD_MOVEL","QTD_BL","SEMAFORO"]
+        avail = [c for c in cols if c in df_seg.columns]
+        st.dataframe(df_seg[avail].head(100), use_container_width=True, hide_index=True, height=400)
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: PARQUE MOVEL
-# ==========================================================
+# ===== PARQUE MOVEL =====
 
 if df_movel is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Movel", "Parque Movel"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Parque Movel",
-            "Visao por linha telefonica com M real do contrato, fidelizacao e dados de trafego."
-        ), unsafe_allow_html=True)
-
-        pm_cards = [
+        st.markdown(page_header("Parque Movel", "Visao por linha telefonica."), unsafe_allow_html=True)
+        st.markdown(kpi_grid([
             kpi_card("Total Linhas", "{:,}".format(len(df_movel)), accent=True),
             kpi_card("Fidelizadas", "{:,}".format(df_movel["FIDELIZADO_MOVEL"].sum())),
             kpi_card("Fat. Medio", "R$ {:,.0f}".format(df_movel["FAT_MEDIO"].sum())),
-            kpi_card("Elig. Blindagem", "{:,}".format(df_movel["ELEGIVEL_BLINDAR_FLAG"].sum())),
+            kpi_card("Blindagem", "{:,}".format(df_movel["ELEGIVEL_BLINDAR_FLAG"].sum())),
             kpi_card("Excedente", "{:,}".format(df_movel["EXCEDENTE_DADOS"].sum())),
             kpi_card("CNPJs", "{:,}".format(df_movel["CNPJ_NORM"].nunique())),
-        ]
-        st.markdown(kpi_grid(pm_cards), unsafe_allow_html=True)
+        ]), unsafe_allow_html=True)
         st.markdown(divider(), unsafe_allow_html=True)
-
         c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(chart_faixa_m_linhas(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
-        with c2:
-            st.plotly_chart(chart_fidelizacao_linhas(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
+        with c1: st.plotly_chart(chart_faixa_m_linhas(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
+        with c2: st.plotly_chart(chart_fidelizacao_linhas(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
         c1, c2 = st.columns(2)
-        with c1:
-            st.plotly_chart(chart_serasa_linhas(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
-        with c2:
-            st.plotly_chart(chart_blindagem(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
-
+        with c1: st.plotly_chart(chart_serasa_linhas(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
+        with c2: st.plotly_chart(chart_blindagem(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
         st.markdown(divider(), unsafe_allow_html=True)
         st.plotly_chart(chart_planos_top(df_movel, 10, theme), use_container_width=True, config={"displayModeBar": False})
-
         st.markdown(divider(), unsafe_allow_html=True)
         st.markdown(section_title("Classificacao M por Cliente"), unsafe_allow_html=True)
-        st.markdown(info_box(
-            "Cada CNPJ pode ter linhas em <strong>diferentes faixas de M</strong>. "
-            "Abaixo: clientes com linhas em multiplos Ms simultaneamente."
-        ), unsafe_allow_html=True)
-
         st.plotly_chart(chart_m_por_cliente(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
-
-        faixas = ["M0-M6", "M7-M12", "M13-M16", "M17-M21", "M22+"]
+        faixas = ["M0-M6","M7-M12","M13-M16","M17-M21","M22+"]
         cross = df_movel.groupby("CNPJ_NORM")["FAIXA_M"].value_counts().unstack(fill_value=0)
         cross = cross.reindex(columns=[f for f in faixas if f in cross.columns], fill_value=0)
         cross["TOTAL_FAIXAS"] = (cross > 0).sum(axis=1)
         multi = cross[cross["TOTAL_FAIXAS"] > 1].sort_values("TOTAL_FAIXAS", ascending=False)
-
         if len(multi) > 0:
+            display = multi.reset_index()
             if df_mapa is not None and "CNPJ_NORM" in df_mapa.columns:
-                names = df_mapa[["CNPJ_NORM", "NOME_CLIENTE"]].drop_duplicates("CNPJ_NORM")
-                display = multi.reset_index().merge(names, on="CNPJ_NORM", how="left")
-            else:
-                display = multi.reset_index()
-            cols_show = ["CNPJ_NORM"]
-            if "NOME_CLIENTE" in display.columns:
-                cols_show = ["NOME_CLIENTE"] + cols_show
-            cols_show += [f for f in faixas if f in display.columns] + ["TOTAL_FAIXAS"]
-            avail = [c for c in cols_show if c in display.columns]
-            st.dataframe(display[avail].head(50), use_container_width=True, hide_index=True, height=400)
-
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+                names = df_mapa[["CNPJ_NORM","NOME_CLIENTE"]].drop_duplicates("CNPJ_NORM")
+                display = display.merge(names, on="CNPJ_NORM", how="left")
+            st.dataframe(display.head(50), use_container_width=True, hide_index=True, height=400)
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: REGUA M
-# ==========================================================
+# ===== REGUA M =====
 
 if df_movel is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Comercial", "Regua M"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Regua de Relacionamento",
-            "Distribuicao de linhas M16-M24+ para disparos automatizados."
-        ), unsafe_allow_html=True)
-
+        st.markdown(page_header("Regua de Relacionamento", "M16-M24+ para disparos automatizados."), unsafe_allow_html=True)
         st.markdown(info_box(
-            "<strong>Estrategia por M:</strong><br>"
-            "M16: Informativo (SMS, email, WhatsApp)<br>"
-            "M17: Semanal (+ ligacao IA)<br>"
-            "M18-M22: Quinzenal, escalacao progressiva<br>"
-            "M23: Semanal emergencial<br>"
-            "M24+: Mensal, contato gerencial"
+            "<strong>Frequencia:</strong> M16 informativo | M17 semanal | M18-M22 quinzenal | M23 semanal | M24+ mensal"
         ), unsafe_allow_html=True)
-
         st.plotly_chart(chart_regua_m(df_movel, theme), use_container_width=True, config={"displayModeBar": False})
-
         st.markdown(divider(), unsafe_allow_html=True)
-        st.markdown(section_title("Detalhamento por Mes"), unsafe_allow_html=True)
-
         m = df_movel["M_INT"]
-        regua_data = []
+        regua = []
         for mes in range(16, 25):
-            if mes == 24:
-                mask = m >= 24
-                label = "M24+"
-            else:
-                mask = (m >= mes) & (m < mes + 1)
-                label = "M{}".format(mes)
+            mask = (m >= 24) if mes == 24 else ((m >= mes) & (m < mes + 1))
+            label = "M{}{}".format(mes, "+" if mes == 24 else "")
             linhas = mask.sum()
-            cnpjs = df_movel[mask]["CNPJ_NORM"].nunique()
-            fat = df_movel[mask]["FAT_MEDIO"].sum()
-            fid = df_movel[mask]["FIDELIZADO_MOVEL"].sum()
-            pct_fid = fid / max(linhas, 1) * 100
-            freq = "Semanal" if mes in [17, 23] else "Informativo" if mes == 16 else "Quinzenal" if 18 <= mes <= 22 else "Mensal"
-            regua_data.append({
-                "Mes": label, "Linhas": linhas, "CNPJs": cnpjs,
-                "Fat. Medio": "R$ {:,.0f}".format(fat),
-                "% Fidelizado": "{:.1f}%".format(pct_fid),
-                "Frequencia": freq,
-            })
-        st.dataframe(pd.DataFrame(regua_data), use_container_width=True, hide_index=True, height=400)
-
+            regua.append({"Mes": label, "Linhas": linhas, "CNPJs": df_movel[mask]["CNPJ_NORM"].nunique(),
+                         "Fat.": "R$ {:,.0f}".format(df_movel[mask]["FAT_MEDIO"].sum()),
+                         "Freq": "Semanal" if mes in [17,23] else "Info" if mes==16 else "Quinz." if 18<=mes<=22 else "Mensal"})
+        st.dataframe(pd.DataFrame(regua), use_container_width=True, hide_index=True)
         st.markdown(divider(), unsafe_allow_html=True)
-        st.markdown(section_title("Exportar Mailing da Regua"), unsafe_allow_html=True)
-
-        mes_sel = st.selectbox(
-            "Selecionar M", list(range(16, 25)),
-            format_func=lambda x: "M{}{}".format(x, "+" if x == 24 else ""), key="regua_sel")
-
-        if mes_sel == 24:
-            df_regua = df_movel[df_movel["M_INT"] >= 24]
-        else:
-            df_regua = df_movel[(df_movel["M_INT"] >= mes_sel) & (df_movel["M_INT"] < mes_sel + 1)]
-
-        if len(df_regua) > 0:
-            cols_export = ["CNPJ_NORM", "CLIENTE", "NR_TELEFONE", "PLANO", "M_INT", "FAIXA_M",
-                          "FIDELIZADO", "FAT_MEDIO", "SEMAFORO_SERASA", "ELEGIVEL_BLINDAR",
-                          "TIPO_REDE", "DS_MUNICIPIO"]
-            avail = [c for c in cols_export if c in df_regua.columns]
-            df_export = df_regua[avail].copy()
-            df_export["MES_REGUA"] = "M{}{}".format(mes_sel, "+" if mes_sel == 24 else "")
-            df_export["GERADO_EM"] = datetime.now().strftime("%d/%m/%Y %H:%M")
-
-            st.download_button(
-                "Baixar M{}{} ({:,} linhas)".format(mes_sel, "+" if mes_sel == 24 else "", len(df_export)),
-                data=to_csv(df_export),
-                file_name="Regua_M{}_{}.csv".format(mes_sel, datetime.now().strftime("%Y%m%d")),
-                mime="text/csv")
-
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+        mes_sel = st.selectbox("Exportar M", range(16,25), format_func=lambda x: "M{}{}".format(x,"+" if x==24 else ""), key="reg_sel")
+        df_r = df_movel[(df_movel["M_INT"]>=24) if mes_sel==24 else ((df_movel["M_INT"]>=mes_sel)&(df_movel["M_INT"]<mes_sel+1))]
+        if len(df_r) > 0:
+            cols_e = ["CNPJ_NORM","CLIENTE","NR_TELEFONE","PLANO","M_INT","FAIXA_M","FIDELIZADO","FAT_MEDIO","SEMAFORO_SERASA"]
+            avail = [c for c in cols_e if c in df_r.columns]
+            exp = df_r[avail].copy()
+            exp["MES_REGUA"] = "M{}{}".format(mes_sel, "+" if mes_sel==24 else "")
+            st.download_button("Baixar ({:,} linhas)".format(len(exp)), data=to_csv(exp),
+                              file_name="Regua_M{}_{}.csv".format(mes_sel, datetime.now().strftime("%Y%m%d")), mime="text/csv")
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: EXPLORAR CLIENTE (drill-down hierarquico)
-# ==========================================================
+# ===== EXPLORAR CLIENTE =====
 
 if df_mapa is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Carteira", "Explorar Cliente"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Explorar Cliente",
-            "Visao hierarquica detalhada: selecione um cliente e veja todas as suas linhas, Ms e indicacoes."
-        ), unsafe_allow_html=True)
+        st.markdown(page_header("Explorar Cliente", "Visao hierarquica: linhas, Ms e indicacoes."), unsafe_allow_html=True)
 
-        # Search
-        search_val = st.text_input("Buscar por nome ou CNPJ", key="explore_search", placeholder="Digite parte do nome ou CNPJ...")
-
+        search_val = st.text_input("Buscar por nome ou CNPJ", key="ex_s", placeholder="Min. 3 caracteres...")
         if search_val and len(search_val) >= 3:
-            mask = (
-                df_f["NOME_CLIENTE"].astype(str).str.contains(search_val, case=False, na=False) |
-                df_f["NR_CNPJ"].astype(str).str.contains(search_val, case=False, na=False)
-            )
+            mask = (df_f["NOME_CLIENTE"].astype(str).str.contains(search_val, case=False, na=False) |
+                    df_f["NR_CNPJ"].astype(str).str.contains(search_val, case=False, na=False))
             results = df_f[mask].head(20)
-
             if len(results) == 0:
                 st.warning("Nenhum cliente encontrado.")
             else:
-                options = results.apply(lambda r: "{} ({})".format(
-                    r.get("NOME_CLIENTE", "?"), r.get("NR_CNPJ", "?")), axis=1).tolist()
-                selected_idx = st.selectbox("Selecione o cliente", range(len(options)),
-                                           format_func=lambda i: options[i], key="explore_sel")
-                cliente = results.iloc[selected_idx]
-                cnpj = cliente.get("CNPJ_NORM", cliente.get("NR_CNPJ", ""))
+                opts = results.apply(lambda r: "{} ({})".format(r.get("NOME_CLIENTE","?"), r.get("NR_CNPJ","?")), axis=1).tolist()
+                sel = st.selectbox("Cliente", range(len(opts)), format_func=lambda i: opts[i], key="ex_sel")
+                cli = results.iloc[sel]
+                cnpj = cli.get("CNPJ_NORM", cli.get("NR_CNPJ", ""))
 
                 st.markdown(divider_grad(), unsafe_allow_html=True)
+                st.markdown(kpi_grid([
+                    kpi_card("CNPJ", str(cli.get("NR_CNPJ","")), accent=True),
+                    kpi_card("Segmento", str(cli.get("SEGMENTO",""))),
+                    kpi_card("Semaforo", str(cli.get("SEMAFORO",""))),
+                    kpi_card("Moveis", str(cli.get("QTD_MOVEL",0))),
+                    kpi_card("BL", str(cli.get("QTD_BL",0))),
+                    kpi_card("Posse", str(cli.get("POSSE_SIMPL",""))),
+                ]), unsafe_allow_html=True)
 
-                # -- NIVEL 1: Dados do cliente --
-                st.markdown(section_title(str(cliente.get("NOME_CLIENTE", ""))), unsafe_allow_html=True)
+                # Flags como pills
+                flags = []
+                for f, n in [("BIG_DEAL","Big Deal"),("MEI","MEI"),("NA_MANCHA","FTTH"),("BIOMETRADO","Biometrado"),("TEM_5G","5G"),("FIDELIZADO","Fidelizado")]:
+                    if cli.get(f): flags.append(n)
+                if flags:
+                    st.markdown('<div style="margin:6px 0 12px;">{}</div>'.format("".join(
+                        '<span style="display:inline-block;padding:2px 8px;border-radius:10px;font-size:0.7rem;'
+                        'font-weight:500;margin:2px;background:var(--acc-bg);color:var(--acc);">{}</span>'.format(f) for f in flags
+                    )), unsafe_allow_html=True)
 
-                cli_cards = [
-                    kpi_card("CNPJ", str(cliente.get("NR_CNPJ", "")), accent=True),
-                    kpi_card("Segmento", str(cliente.get("SEGMENTO", ""))),
-                    kpi_card("Semaforo", str(cliente.get("SEMAFORO", ""))),
-                    kpi_card("Linhas Moveis", str(cliente.get("QTD_MOVEL", 0))),
-                    kpi_card("Banda Larga", str(cliente.get("QTD_BL", 0))),
-                    kpi_card("Posse", str(cliente.get("POSSE_SIMPL", ""))),
-                ]
-                st.markdown(kpi_grid(cli_cards), unsafe_allow_html=True)
-
-                # Extra info
-                extra_items = []
-                if cliente.get("BIG_DEAL"):
-                    extra_items.append("Big Deal")
-                if cliente.get("MEI"):
-                    extra_items.append("MEI")
-                if cliente.get("NA_MANCHA"):
-                    extra_items.append("Mancha FTTH")
-                if cliente.get("BIOMETRADO"):
-                    extra_items.append("Biometrado")
-                if cliente.get("TEM_5G"):
-                    extra_items.append("Cobertura 5G")
-                if cliente.get("FIDELIZADO"):
-                    extra_items.append("Fidelizado")
-
-                if extra_items:
-                    pills_html = "".join(
-                        '<span style="display:inline-block;padding:4px 12px;border-radius:16px;'
-                        'font-size:0.74rem;font-weight:500;margin:2px 4px;'
-                        'background:var(--acc-bg);color:var(--acc);">{}</span>'.format(p)
-                        for p in extra_items)
-                    st.markdown('<div style="margin:8px 0 16px;">{}</div>'.format(pills_html), unsafe_allow_html=True)
-
-                # PM data
-                if "PM_QTD_LINHAS" in cliente.index and pd.notna(cliente.get("PM_QTD_LINHAS")) and cliente["PM_QTD_LINHAS"] > 0:
+                # Arvore de linhas
+                if "PM_QTD_LINHAS" in cli.index and pd.notna(cli.get("PM_QTD_LINHAS")) and cli["PM_QTD_LINHAS"] > 0:
                     st.markdown(divider(), unsafe_allow_html=True)
-                    st.markdown(section_title("Parque Movel do Cliente"), unsafe_allow_html=True)
+                    st.markdown(kpi_grid([
+                        kpi_card("Linhas", "{:.0f}".format(cli["PM_QTD_LINHAS"]), accent=True),
+                        kpi_card("M Medio", "{:.1f}".format(cli.get("PM_M_MEDIO",0))),
+                        kpi_card("Fat.", "R$ {:,.0f}".format(cli.get("PM_FAT_TOTAL",0))),
+                        kpi_card("% Fid.", "{:.0f}%".format(cli.get("PM_PCT_FIDELIZADO",0))),
+                    ]), unsafe_allow_html=True)
 
-                    pm_cards = [
-                        kpi_card("Linhas PM", "{:,.0f}".format(cliente["PM_QTD_LINHAS"]), accent=True),
-                        kpi_card("M Medio", "{:.1f}".format(cliente.get("PM_M_MEDIO", 0))),
-                        kpi_card("M Min / Max", "{:.0f} / {:.0f}".format(
-                            cliente.get("PM_M_MIN", 0), cliente.get("PM_M_MAX", 0))),
-                        kpi_card("Fat. Total", "R$ {:,.0f}".format(cliente.get("PM_FAT_TOTAL", 0))),
-                        kpi_card("% Fidelizado", "{:.0f}%".format(cliente.get("PM_PCT_FIDELIZADO", 0))),
-                        kpi_card("Faixa Predom.", str(cliente.get("PM_FAIXA_M_PREDOMINANTE", ""))),
-                    ]
-                    st.markdown(kpi_grid(pm_cards), unsafe_allow_html=True)
-
-                    # -- NIVEL 2: Arvore hierarquica das linhas --
                     if df_movel is not None:
-                        linhas_cli = df_movel[df_movel["CNPJ_NORM"] == cnpj].copy()
-                        if len(linhas_cli) > 0:
-                            st.markdown(section_title("Arvore de Linhas por Faixa M"), unsafe_allow_html=True)
+                        linhas = df_movel[df_movel["CNPJ_NORM"] == cnpj]
+                        if len(linhas) > 0:
+                            st.markdown(section_title("Linhas por Faixa M"), unsafe_allow_html=True)
+                            h = '<div style="font-size:0.82rem;">'
+                            for fx in ["M0-M6","M7-M12","M13-M16","M17-M21","M22+"]:
+                                fl = linhas[linhas["FAIXA_M"]==fx]
+                                if len(fl) == 0: continue
+                                urgent = fx in ["M17-M21","M22+"]
+                                fc = "var(--acc2)" if urgent else "var(--acc3)"
+                                h += '<div style="margin:8px 0 2px;padding:6px 12px;border-radius:6px;background:var(--hover);border-left:2px solid {};">'.format(fc)
+                                h += '<span style="font-weight:600;color:{};">{}</span>'.format(fc, fx)
+                                h += '<span style="color:var(--tx3);margin-left:6px;font-size:0.76rem;">{} linha{}</span></div>'.format(len(fl), "s" if len(fl)!=1 else "")
+                                for _, l in fl.iterrows():
+                                    fid = "Fid" if l.get("FIDELIZADO_MOVEL") else "N/Fid"
+                                    fc2 = "var(--success)" if fid=="Fid" else "var(--error)"
+                                    h += '<div style="margin-left:16px;padding:4px 12px;border-left:1px solid var(--border);font-size:0.78rem;">'
+                                    h += '<span style="font-family:monospace;color:var(--tx);">{}</span> '.format(str(l.get("NR_TELEFONE","")))
+                                    h += '<span style="color:var(--tx3);">M{:.0f}</span> '.format(l.get("M_INT",0))
+                                    h += '<span style="color:{};font-size:0.7rem;">{}</span>'.format(fc2, fid)
+                                    if l.get("ELEGIVEL_BLINDAR_FLAG"):
+                                        h += ' <span style="font-size:0.66rem;padding:1px 5px;border-radius:8px;background:var(--acc-bg);color:var(--acc);">Blindar</span>'
+                                    h += '<div style="color:var(--tx3);font-size:0.72rem;">{}  R$ {:,.0f}</div>'.format(
+                                        str(l.get("PLANO",""))[:35], l.get("FAT_MEDIO",0))
+                                    h += '</div>'
+                            h += '</div>'
+                            st.markdown(h, unsafe_allow_html=True)
 
-                            # Hierarchical tree view
-                            faixas_order = ["M0-M6", "M7-M12", "M13-M16", "M17-M21", "M22+"]
-                            tree_html = '<div style="font-family:var(--font-body);font-size:0.84rem;">'
-
-                            for faixa in faixas_order:
-                                faixa_linhas = linhas_cli[linhas_cli["FAIXA_M"] == faixa]
-                                if len(faixa_linhas) == 0:
-                                    continue
-
-                                # Faixa header
-                                is_urgent = faixa in ["M17-M21", "M22+"]
-                                faixa_color = "var(--acc2)" if is_urgent else "var(--acc)"
-                                tree_html += (
-                                    '<div style="margin:12px 0 4px 0;padding:8px 14px;border-radius:8px;'
-                                    'background:var(--hover);border-left:3px solid {fc};">'
-                                    '<span style="font-weight:600;color:{fc};">{faixa}</span>'
-                                    '<span style="color:var(--tx2);margin-left:8px;">'
-                                    '{n} linha{s}</span>'
-                                    '</div>'
-                                ).format(fc=faixa_color, faixa=faixa, n=len(faixa_linhas),
-                                        s="s" if len(faixa_linhas) != 1 else "")
-
-                                # Individual lines
-                                for _, linha in faixa_linhas.iterrows():
-                                    tel = str(linha.get("NR_TELEFONE", ""))
-                                    plano = str(linha.get("PLANO", ""))[:40]
-                                    m_val = linha.get("M_INT", 0)
-                                    fid = "Fidelizada" if linha.get("FIDELIZADO_MOVEL") else "Nao fidelizada"
-                                    fat = linha.get("FAT_MEDIO", 0)
-                                    serasa = str(linha.get("SEMAFORO_SERASA", ""))
-                                    blind = "Elegivel" if linha.get("ELEGIVEL_BLINDAR_FLAG") else ""
-
-                                    fid_color = "var(--success)" if "Fidelizada" == fid else "var(--error)"
-                                    tree_html += (
-                                        '<div style="margin-left:20px;padding:6px 14px;border-left:1px solid var(--border);'
-                                        'font-size:0.8rem;">'
-                                        '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
-                                        '<span style="font-weight:600;color:var(--tx);font-family:var(--font-mono,monospace);">{tel}</span>'
-                                        '<span style="color:var(--tx2);">M{m:.0f}</span>'
-                                        '<span style="color:{fc};font-size:0.72rem;">{fid}</span>'
-                                        '{blind}'
-                                        '</div>'
-                                        '<div style="color:var(--tx3);font-size:0.76rem;margin-top:2px;">'
-                                        '{plano} | R$ {fat:,.0f}/mes | Serasa: {serasa}</div>'
-                                        '</div>'
-                                    ).format(tel=tel, m=m_val, fid=fid, fc=fid_color,
-                                            plano=plano, fat=fat, serasa=serasa,
-                                            blind='<span style="font-size:0.68rem;padding:2px 6px;border-radius:10px;background:var(--acc-bg);color:var(--acc);">Blindar</span>' if blind else "")
-
-                                tree_html += '</div>'
-                            st.markdown(tree_html, unsafe_allow_html=True)
-
-                # -- NIVEL 3: Indicacoes comerciais automaticas --
+                # Indicacoes
                 st.markdown(divider(), unsafe_allow_html=True)
-                st.markdown(section_title("Indicacoes Comerciais"), unsafe_allow_html=True)
-
-                indicacoes = []
-                pm_m17 = cliente.get("PM_LINHAS_M17_PLUS", 0) or 0
-                pm_m7_16 = cliente.get("PM_LINHAS_M7_M16", 0) or 0
-                pm_m7_12 = cliente.get("PM_LINHAS_M7_M12", 0) or 0
-
-                if pm_m17 > 0 and not cliente.get("TEM_FIXA"):
-                    indicacoes.append(("RENOVAR + FTTH", "Tem {:.0f} linhas com M17+, sem fixa. Oportunidade de renovacao + venda de FTTH.".format(pm_m17), "var(--acc)"))
-                if pm_m17 > 0 and cliente.get("TEM_FIXA"):
-                    indicacoes.append(("RENOVAR", "Tem {:.0f} linhas com M17+ e ja possui fixa. Foco na renovacao.".format(pm_m17), "var(--acc)"))
-                if pm_m7_16 > 0:
-                    indicacoes.append(("UP", "Tem {:.0f} linhas entre M7-M16. Janela ideal para upgrade de plano.".format(pm_m7_16), "var(--acc3)"))
-                if pm_m7_12 > 0 and cliente.get("TEM_APARELHOS"):
-                    indicacoes.append(("UP + APARELHO", "Linhas M7-M12 com aparelho financiado. Oferecer upgrade + aparelho novo.".format(pm_m7_12), "var(--acc3)"))
-                if not cliente.get("NA_MANCHA") and cliente.get("TEM_MOVEL"):
-                    indicacoes.append(("VVN", "Fora da mancha FTTH. Considerar oferta de VVN (Vivo Voz Negocio).", "var(--warning)"))
-                if cliente.get("CAR_TOTAL", 0) > 0:
-                    indicacoes.append(("CAR", "Conta a Receber pendente: R$ {:.0f}. Priorizar relacionamento.".format(cliente["CAR_TOTAL"]), "var(--error)"))
-                if not cliente.get("BIOMETRADO"):
-                    indicacoes.append(("BIOMETRIA", "Cliente nao biometrado. Agendar visita.", "var(--warning)"))
-                if cliente.get("TEM_5G"):
-                    indicacoes.append(("5G", "Em area de cobertura 5G. Oferecer troca de chip + aparelho.", "var(--info)"))
-                if not cliente.get("TEM_MOVEL") and cliente.get("TEM_FIXA"):
-                    indicacoes.append(("TOTALIZACAO", "Tem fixa sem movel. Grande oportunidade de migracao/totalizacao.", "var(--acc2)"))
-
-                if indicacoes:
-                    for titulo, desc, cor in indicacoes:
-                        st.markdown(
-                            '<div style="padding:10px 16px;border-radius:8px;border-left:3px solid {c};'
-                            'background:var(--hover);margin-bottom:8px;">'
-                            '<span style="font-weight:600;color:{c};font-size:0.84rem;">{t}</span>'
-                            '<div style="color:var(--tx2);font-size:0.8rem;margin-top:2px;">{d}</div>'
-                            '</div>'.format(c=cor, t=titulo, d=desc), unsafe_allow_html=True)
-                else:
-                    st.markdown(info_box("Sem indicacoes automaticas para este perfil de cliente."), unsafe_allow_html=True)
-
+                st.markdown(section_title("Indicacoes"), unsafe_allow_html=True)
+                inds = []
+                pm17 = cli.get("PM_LINHAS_M17_PLUS",0) or 0
+                pm7 = cli.get("PM_LINHAS_M7_M16",0) or 0
+                if pm17 > 0 and not cli.get("TEM_FIXA"):
+                    inds.append(("RENOVAR+FTTH", "{:.0f} linhas M17+ sem fixa".format(pm17), "var(--acc)"))
+                if pm17 > 0 and cli.get("TEM_FIXA"):
+                    inds.append(("RENOVAR", "{:.0f} linhas M17+".format(pm17), "var(--acc)"))
+                if pm7 > 0:
+                    inds.append(("UP", "{:.0f} linhas M7-M16".format(pm7), "var(--acc3)"))
+                if cli.get("CAR_TOTAL",0) > 0:
+                    inds.append(("CAR", "R$ {:.0f} pendente".format(cli["CAR_TOTAL"]), "var(--error)"))
+                if not cli.get("TEM_MOVEL") and cli.get("TEM_FIXA"):
+                    inds.append(("TOTALIZACAO", "Fixa sem movel", "var(--acc2)"))
+                if not cli.get("BIOMETRADO"):
+                    inds.append(("BIOMETRIA", "Nao biometrado", "var(--warning)"))
+                for t, d, c in inds:
+                    st.markdown('<div style="padding:8px 14px;border-radius:6px;border-left:2px solid {};background:var(--hover);margin-bottom:6px;">'
+                               '<span style="font-weight:600;color:{};font-size:0.82rem;">{}</span>'
+                               '<span style="color:var(--tx2);font-size:0.78rem;margin-left:8px;">{}</span></div>'.format(c,c,t,d), unsafe_allow_html=True)
+                if not inds:
+                    st.markdown(info_box("Sem indicacoes automaticas."), unsafe_allow_html=True)
         else:
-            st.markdown(info_box(
-                "Digite pelo menos <strong>3 caracteres</strong> do nome ou CNPJ para buscar."
-            ), unsafe_allow_html=True)
-
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+            st.markdown(info_box("Digite pelo menos <strong>3 caracteres</strong> para buscar."), unsafe_allow_html=True)
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: MAILINGS
-# ==========================================================
+# ===== MAILINGS =====
 
 if df_mapa is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Comercial", "Mailings"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Mailings - Raio X Carteira",
-            "16 mailings automatizados conforme PDF Raio X Carteira."
-        ), unsafe_allow_html=True)
+        st.markdown(page_header("Mailings", "16 mailings automatizados do Raio X."), unsafe_allow_html=True)
 
-        all_mailings = gerar_todos_mailings(df_mapa)
+        # Filtro de Deals
+        filtrar_deals = False
+        if cnpjs_tratativa or nomes_tratativa:
+            total_trat = len(cnpjs_tratativa | nomes_tratativa) if cnpjs_tratativa and nomes_tratativa else len(cnpjs_tratativa) + len(nomes_tratativa)
+            filtrar_deals = st.checkbox(
+                "Excluir clientes com deal aberto no Bitrix ({:,} em tratativa)".format(len(nomes_tratativa) or len(cnpjs_tratativa)),
+                value=True, key="filtrar_deals")
 
-        if all_mailings:
-            st.download_button(
-                "Baixar TODOS ({} mailings em Excel)".format(len(all_mailings)),
-                data=to_excel(all_mailings),
-                file_name="Mailings_RaioX_{}.xlsx".format(datetime.now().strftime("%Y%m%d_%H%M")),
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        all_m = gerar_todos_mailings(df_mapa)
 
-        def _render_section(prefix, title):
+        # Aplicar filtro de deals se ativo
+        if filtrar_deals and (cnpjs_tratativa or nomes_tratativa):
+            total_antes = sum(len(v) for v in all_m.values())
+            for k in all_m:
+                if len(all_m[k]) > 0:
+                    all_m[k], _ = filtrar_mailing_sem_deals(all_m[k], cnpjs_tratativa, nomes_tratativa)
+            total_depois = sum(len(v) for v in all_m.values())
+            st.markdown(info_box(
+                "Filtro Deals ativo: <strong>{:,}</strong> registros removidos (de {:,} para {:,}).".format(
+                    total_antes - total_depois, total_antes, total_depois)
+            ), unsafe_allow_html=True)
+        if all_m:
+            st.download_button("Baixar TODOS ({} mailings)".format(len(all_m)), data=to_excel(all_m),
+                              file_name="Mailings_{}.xlsx".format(datetime.now().strftime("%Y%m%d")),
+                              mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        def _sec(prefix, title):
             st.markdown(section_title(title), unsafe_allow_html=True)
-            section = {k: v for k, v in all_mailings.items() if k.startswith(prefix)}
+            sec = {k:v for k,v in all_m.items() if k.startswith(prefix)}
             cols = st.columns(2)
-            for i, (cod, ml) in enumerate(section.items()):
-                if len(ml) == 0:
-                    continue
-                objetivo = ml["OBJETIVO"].iloc[0] if "OBJETIVO" in ml.columns else ""
+            for i,(cod,ml) in enumerate(sec.items()):
+                if len(ml)==0: continue
+                obj = ml["OBJETIVO"].iloc[0] if "OBJETIVO" in ml.columns else ""
                 obs = ml["OBSERVACAO"].iloc[0] if "OBSERVACAO" in ml.columns else ""
                 color = "#8B5CF6"
-                for key, c in MAILING_CORES.items():
-                    if key in objetivo.upper():
-                        color = c
-                        break
-                display_name = cod.split("_", 1)[1].replace("_", " ") if "_" in cod else cod
-                with cols[i % 2]:
-                    st.markdown(mailing_card_html(
-                        cod.split("_")[0], display_name, len(ml), objetivo, obs, color
-                    ), unsafe_allow_html=True)
-                    st.download_button(
-                        "Baixar {}".format(cod.split("_")[0]),
-                        data=to_csv(ml),
-                        file_name="Mailing_{}_{}.csv".format(cod, datetime.now().strftime("%Y%m%d")),
-                        mime="text/csv", key="ml_{}".format(cod))
-
-        _render_section("1.", "1. Movel")
+                for key,c in MAILING_CORES.items():
+                    if key in obj.upper(): color = c; break
+                dn = cod.split("_",1)[1].replace("_"," ") if "_" in cod else cod
+                with cols[i%2]:
+                    st.markdown(mailing_card_html(cod.split("_")[0], dn, len(ml), obj, obs, color), unsafe_allow_html=True)
+                    st.download_button("Baixar {}".format(cod.split("_")[0]), data=to_csv(ml),
+                                      file_name="Mailing_{}_{}.csv".format(cod, datetime.now().strftime("%Y%m%d")),
+                                      mime="text/csv", key="ml_{}".format(cod))
+        _sec("1.", "1. Migracoes")
         st.markdown(divider(), unsafe_allow_html=True)
-        _render_section("2.", "2. Fixa")
+        _sec("2.", "2. Renovacoes")
         st.markdown(divider(), unsafe_allow_html=True)
-        _render_section("3.", "3. Indicadores")
-
+        _sec("3.", "3. Cross-Sell e Totalizacao")
+        st.markdown(divider(), unsafe_allow_html=True)
+        _sec("4.", "4. Indicadores e Relacionamento")
         st.markdown(divider_grad(), unsafe_allow_html=True)
         st.markdown(section_title("Mailing Customizado"), unsafe_allow_html=True)
-        st.markdown(info_box(
-            "Base filtrada: <strong>{:,}</strong> clientes. Aplique filtros na sidebar e exporte.".format(
-                len(df_f) if df_f is not None else 0)
-        ), unsafe_allow_html=True)
-
-        custom_name = st.text_input("Nome do mailing", value="CUSTOM", key="custom_name")
-        if st.button("Gerar Mailing Customizado", key="gen_custom"):
+        cn = st.text_input("Nome", value="CUSTOM", key="cn")
+        if st.button("Gerar", key="gc"):
             if df_f is not None:
-                custom = gerar_mailing_customizado(df_f, custom_name)
-                st.success("{:,} clientes no mailing.".format(len(custom)))
-                st.download_button(
-                    "Baixar {}".format(custom_name),
-                    data=to_csv(custom),
-                    file_name="Mailing_{}_{}.csv".format(custom_name, datetime.now().strftime("%Y%m%d")),
-                    mime="text/csv", key="dl_custom")
-
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+                custom = gerar_mailing_customizado(df_f, cn)
+                st.success("{:,} clientes".format(len(custom)))
+                st.download_button("Baixar", data=to_csv(custom),
+                                  file_name="Mailing_{}_{}.csv".format(cn, datetime.now().strftime("%Y%m%d")),
+                                  mime="text/csv", key="dc")
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: DADOS BRUTOS
-# ==========================================================
+# ===== VENDEDORES =====
+
+if df_mapa is not None:
+    with tabs[ti]:
+        st.markdown(breadcrumb(["Comercial", "Vendedores"]), unsafe_allow_html=True)
+        st.markdown(page_header("Controle por Vendedor", "Faturamento, deals e performance."), unsafe_allow_html=True)
+
+        # Dados de deals (do banco ou do upload)
+        vendor_stats = db.calcular_stats_vendedores()
+
+        if not vendor_stats.empty:
+            st.markdown(kpi_grid([
+                kpi_card("Vendedores", "{:,}".format(len(vendor_stats)), accent=True),
+                kpi_card("Total Deals", "{:,}".format(int(vendor_stats["total_deals"].sum()))),
+                kpi_card("Fat. Total", "R$ {:,.0f}".format(vendor_stats["faturamento_total"].sum())),
+                kpi_card("Fat. Medio", "R$ {:,.0f}".format(vendor_stats["faturamento_medio"].mean())),
+            ]), unsafe_allow_html=True)
+
+            st.markdown(divider(), unsafe_allow_html=True)
+            st.markdown(section_title("Ranking por Faturamento"), unsafe_allow_html=True)
+
+            display_stats = vendor_stats.copy()
+            display_stats = display_stats.rename(columns={
+                "responsavel": "Vendedor",
+                "total_deals": "Total Deals",
+                "deals_abertos": "Abertos",
+                "deals_fechados": "Fechados",
+                "faturamento_total": "Fat. Total",
+                "faturamento_medio": "Fat. Medio",
+                "taxa_conversao": "Conversao %",
+            })
+            display_stats["Fat. Total"] = display_stats["Fat. Total"].apply(lambda x: "R$ {:,.0f}".format(x))
+            display_stats["Fat. Medio"] = display_stats["Fat. Medio"].apply(lambda x: "R$ {:,.0f}".format(x))
+            st.dataframe(display_stats, use_container_width=True, hide_index=True, height=500)
+
+            st.markdown(divider(), unsafe_allow_html=True)
+
+            # Detalhamento por vendedor
+            st.markdown(section_title("Detalhar Vendedor"), unsafe_allow_html=True)
+            vendedor_sel = st.selectbox("Vendedor", vendor_stats["responsavel"].tolist(), key="vend_sel")
+            if vendedor_sel:
+                deals_vend = db.get_deals_abertos()
+                if not deals_vend.empty:
+                    deals_vend = deals_vend[deals_vend["responsavel"] == vendedor_sel]
+                    st.markdown(kpi_grid([
+                        kpi_card("Deals Abertos", "{:,}".format(len(deals_vend)), accent=True),
+                        kpi_card("Fat. Aberto", "R$ {:,.0f}".format(deals_vend["renda"].sum())),
+                    ]), unsafe_allow_html=True)
+                    if len(deals_vend) > 0:
+                        cols_show = ["nome", "fase", "renda", "criado"]
+                        avail = [c for c in cols_show if c in deals_vend.columns]
+                        st.dataframe(deals_vend[avail], use_container_width=True, hide_index=True, height=300)
+        else:
+            st.markdown(info_box(
+                "Nenhum dado de deals disponivel. <strong>Opcoes:</strong><br>"
+                "1. Suba o CSV de Deals na sidebar<br>"
+                "2. Configure o webhook Bitrix na aba Config e clique em 'Atualizar Deals'"
+            ), unsafe_allow_html=True)
+
+        st.markdown(footer_html(), unsafe_allow_html=True)
+    ti += 1
+
+
+# ===== DADOS BRUTOS =====
 
 if df_mapa is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Dados", "Dados Brutos"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Dados Brutos",
-            "Tabela interativa com todas as colunas."
-        ), unsafe_allow_html=True)
-
-        default_cols = [
-            "NOME_CLIENTE", "NR_CNPJ", "SEGMENTO", "CATEGORIA_M_REAL",
-            "QTD_MOVEL", "QTD_BL", "SEMAFORO", "NA_MANCHA",
-            "BIG_DEAL", "FIDELIZADO", "CAR_TOTAL",
-            "PM_QTD_LINHAS", "PM_M_MEDIO", "PM_FAT_TOTAL",
-        ]
-        avail_cols = [c for c in default_cols if c in df_f.columns]
-        all_cols = df_f.columns.tolist()
-
-        selected = st.multiselect("Colunas", options=all_cols, default=avail_cols[:10], key="raw_cols")
-
-        if selected:
-            df_display = df_f[selected].copy()
-            for bc in ["NA_MANCHA", "MEI", "BIG_DEAL", "FIDELIZADO", "TEM_5G", "BIOMETRADO"]:
-                if bc in df_display.columns:
-                    df_display[bc] = df_display[bc].map({True: "Sim", False: "Nao"})
-            search = st.text_input("Buscar", key="search_raw", placeholder="Nome, CNPJ...")
-            if search:
-                mask = df_display.astype(str).apply(
-                    lambda x: x.str.contains(search, case=False, na=False)).any(axis=1)
-                df_display = df_display[mask]
-            st.dataframe(df_display, use_container_width=True, height=500, hide_index=True)
-            st.caption("{:,} de {:,} clientes".format(len(df_display), len(df_f)))
-            st.download_button(
-                "Baixar CSV",
-                data=to_csv(df_display),
-                file_name="Dados_{}.csv".format(datetime.now().strftime("%Y%m%d_%H%M")),
-                mime="text/csv", key="dl_raw")
-
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+        st.markdown(page_header("Dados Brutos", "Tabela interativa."), unsafe_allow_html=True)
+        dcols = ["NOME_CLIENTE","NR_CNPJ","SEGMENTO","CATEGORIA_M_REAL","QTD_MOVEL","QTD_BL","SEMAFORO","CAR_TOTAL","PM_QTD_LINHAS","PM_M_MEDIO"]
+        avail = [c for c in dcols if c in df_f.columns]
+        sel = st.multiselect("Colunas", df_f.columns.tolist(), default=avail[:8], key="rc")
+        if sel:
+            dd = df_f[sel].copy()
+            for bc in ["NA_MANCHA","MEI","BIG_DEAL","FIDELIZADO","TEM_5G","BIOMETRADO"]:
+                if bc in dd.columns: dd[bc] = dd[bc].map({True:"Sim",False:"Nao"})
+            s = st.text_input("Buscar", key="sr", placeholder="Nome, CNPJ...")
+            if s: dd = dd[dd.astype(str).apply(lambda x: x.str.contains(s, case=False, na=False)).any(axis=1)]
+            st.dataframe(dd, use_container_width=True, height=500, hide_index=True)
+            st.caption("{:,} / {:,}".format(len(dd), len(df_f)))
+            st.download_button("CSV", data=to_csv(dd), file_name="Dados_{}.csv".format(datetime.now().strftime("%Y%m%d")), mime="text/csv", key="dr")
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
 
-# ==========================================================
-# TAB: METODOLOGIA
-# ==========================================================
+# ===== METODOLOGIA =====
 
 if df_mapa is not None:
     with tabs[ti]:
         st.markdown(breadcrumb(["Dados", "Metodologia"]), unsafe_allow_html=True)
-        st.markdown(page_header(
-            "Metodologia e Classificacoes",
-            "Como os dados sao processados, cruzados e classificados neste dashboard."
+        st.markdown(page_header("Metodologia", "Como os dados sao processados e classificados."), unsafe_allow_html=True)
+
+        st.markdown(section_title("1. Fontes"), unsafe_allow_html=True)
+        st.markdown(info_box(
+            "<strong>Mapa Parque</strong> — 1 linha por CNPJ, 92 colunas. Posse, CAR, FTTH, biometria, contatos.<br>"
+            "<strong>Parque Movel</strong> — 1 linha por telefone, 45 colunas. Plano, M real, fidelizacao, Serasa."
         ), unsafe_allow_html=True)
 
-        st.markdown(section_title("1. Fontes de Dados"), unsafe_allow_html=True)
+        st.markdown(section_title("2. Cruzamento"), unsafe_allow_html=True)
         st.markdown(info_box(
-            "<strong>Mapa Parque (Visao Cliente)</strong><br>"
-            "Arquivo: RelatorioInfoB2B_MapaParqueVisaoCliente_*.csv<br>"
-            "Origem: InfoB2B Vivo | 1 linha por CNPJ | 92 colunas<br>"
-            "Conteudo: posse (movel, fixa, BL, VVN, Vivo Tech), "
-            "cobertura FTTH, fidelizacao, biometria, CAR, contatos, endereco, vertical, cluster."
-        ), unsafe_allow_html=True)
-        st.markdown(info_box(
-            "<strong>Parque Movel (Visao Linha)</strong><br>"
-            "Arquivo: RelatorioInfoB2B_ParqueMovel_*.csv<br>"
-            "Origem: InfoB2B Vivo | 1 linha por telefone | 45 colunas<br>"
-            "Conteudo: numero, CNPJ, plano, <strong>M real</strong>, fidelizacao, "
-            "faturamento, Serasa, blindagem, excedente, tipo de rede."
+            "CNPJ normalizado &rarr; Agrupar Parque Movel por CNPJ &rarr; LEFT JOIN com Mapa Parque.<br>"
+            "Resultado: colunas PM_* com M real (mais preciso que MESES_CARTEIRA do Mapa)."
         ), unsafe_allow_html=True)
 
-        st.markdown(divider(), unsafe_allow_html=True)
-        st.markdown(section_title("2. Cruzamento de Dados"), unsafe_allow_html=True)
-        st.markdown(info_box(
-            "<strong>Passo a passo:</strong><br>"
-            "1. Normalizamos CNPJ do Parque Movel (so numeros, 14 digitos)<br>"
-            "2. Agrupamos por CNPJ: total linhas, fidelizadas, M min/max/medio, "
-            "faturamento, linhas M17+, M7-M16, M7-M12, faixa predominante, pior Serasa<br>"
-            "3. LEFT JOIN do Mapa Parque com Parque Movel agrupado (chave: CNPJ)<br>"
-            "4. Resultado: colunas PM_* com dados reais<br><br>"
-            "<strong>Por que importa:</strong> O Mapa Parque tem MESES_CARTEIRA (impreciso). "
-            "O Parque Movel tem o <strong>M real</strong> de cada linha."
-        ), unsafe_allow_html=True)
-
-        st.markdown(divider(), unsafe_allow_html=True)
         st.markdown(section_title("3. Classificacoes"), unsafe_allow_html=True)
         st.markdown(info_box(
-            "<strong>Semaforo CAR</strong> = CAR_MOVEL + CAR_FIXA<br>"
-            "PRETO/CINZA: 0 | VERDE: 1-49 | AMARELO: 50-149 | VERMELHO: 150+"
-        ), unsafe_allow_html=True)
-        st.markdown(info_box(
-            "<strong>Categoria M</strong> (do Parque Movel)<br>"
-            "M0-M6: Novo | M7-M12: Janela UP | M13-M16: Pre-renovacao | "
-            "M17-M21: RENOVACAO | M22+: Vencido<br>"
-            "Um cliente pode ter linhas em DIFERENTES Ms!"
-        ), unsafe_allow_html=True)
-        st.markdown(info_box(
-            "<strong>Segmentacao</strong> (derivada da posse)<br>"
-            "TOTALIZACAO: movel sem fixa | MIGRACAO: fixa sem movel | "
-            "BLINDAGEM: totalizado renovando | CROSS-SELL: totalizado + produtos | "
-            "AVANCADOS: internet dedicada | DIGITALIZACAO: produtos digitais"
+            "<strong>CAR:</strong> PRETO 0 | VERDE 1-49 | AMARELO 50-149 | VERMELHO 150+<br>"
+            "<strong>M:</strong> M0-6 novo | M7-12 UP | M13-16 pre-renov | M17-21 RENOVACAO | M22+ vencido<br>"
+            "<strong>Segmento:</strong> TOTALIZACAO (movel s/ fixa) | MIGRACAO (fixa s/ movel) | BLINDAGEM | CROSS-SELL | AVANCADOS | DIGITAL"
         ), unsafe_allow_html=True)
 
-        st.markdown(info_box(
+        st.markdown(section_title("4. Mailings"), unsafe_allow_html=True)
+        for cod, nome, filtro in [
+            ("1.1","Movel s/ Fixa M17+","TEM_MOVEL + !TEM_FIXA + PM_M17+>0"),
+            ("1.2","Movel c/ Fixa M17+","TEM_MOVEL + TEM_FIXA + PM_M17+>0"),
+            ("1.3","Excedente M7-16","TEM_MOVEL + PM_M7_M16>0"),
+            ("1.4","Credito Aparelho","TEM_MOVEL + PM_M7_M12>0 + APARELHOS"),
+            ("1.5","s/ Mancha M17-21","TEM_MOVEL + !MANCHA + PM_M 17-21"),
+            ("1.6","Propensao","PORT_POTENCIAL Alto/Medio"),
+            ("2.1","Fixa s/ Movel","TEM_FIXA + !TEM_MOVEL"),
+            ("2.2","PEN","TEM_PEN"),
+            ("2.3","Fixa UP","TEM_FIXA + !MOVEL + !FIDELIZADO"),
+            ("2.4","Renov. Fixa","TEM_FIXA + FIDELIZADO"),
+            ("3.1","CAR","CAR_TOTAL>0"),
+            ("3.2","Biometria","!BIOMETRADO"),
+            ("3.3","5G","TEM_5G"),
+            ("3.4","VTech","QTD_VTECH>0"),
+            ("3.5","VTech Pot.","QTD_VTECH=0 + VIVO_TECH"),
+            ("3.6","Digital","DIGITAL_1 preenchido"),
+        ]:
+            st.markdown('<div style="padding:6px 12px;border-radius:6px;background:var(--hover);margin-bottom:4px;'
+                       'display:flex;justify-content:space-between;font-size:0.8rem;">'
+                       '<span style="color:var(--tx);font-weight:500;">{} {}</span>'
+                       '<span style="color:var(--acc);font-family:monospace;font-size:0.74rem;">{}</span>'
+                       '</div>'.format(cod, nome, filtro), unsafe_allow_html=True)
 
-                    "<strong>Régua M (detalhamento por mês)</strong><br>"
+        st.markdown(section_title("5. INFO_FONTE"), unsafe_allow_html=True)
+        st.markdown(info_box("Todo CSV exportado tem coluna <strong>INFO_FONTE</strong> com tabela, colunas e filtros usados."), unsafe_allow_html=True)
 
-                    "A régua M classifica as linhas em diferentes estágios de relacionamento com base no 'M' (mês) do contrato.<br>"
-
-                    "M16: Informativo (SMS, email, WhatsApp)<br>"
-
-                    "M17: Semanal (+ ligacao IA)<br>"
-
-                    "M18-M22: Quinzenal, escalacao progressiva<br>"
-
-                    "M23: Semanal emergencial<br>"
-
-                    "M24+: Mensal, contato gerencial<br>"
-
-                    "Essa classificação permite ações de comunicação e retenção direcionadas para cada grupo."
-
-                ), unsafe_allow_html=True)
-
-        st.markdown(divider(), unsafe_allow_html=True)
-        st.markdown(section_title("4. Logica dos 16 Mailings"), unsafe_allow_html=True)
-        mailing_docs = [
-            ("1.1", "Movel s/ Fixa M17+", "TEM_MOVEL + !TEM_FIXA + PM_M17+>0"),
-            ("1.2", "Movel c/ Fixa M17+", "TEM_MOVEL + TEM_FIXA + PM_M17+>0"),
-            ("1.3", "Excedente M7-M16", "TEM_MOVEL + PM_M7_M16>0"),
-            ("1.4", "Credito Aparelho", "TEM_MOVEL + PM_M7_M12>0 + TEM_APARELHOS"),
-            ("1.5", "s/ Mancha M17-21", "TEM_MOVEL + !MANCHA + PM_M_MEDIO 17-21"),
-            ("1.6", "Propensao", "PORT_POTENCIAL Alto/Medio"),
-            ("2.1", "Fixa s/ Movel", "TEM_FIXA + !TEM_MOVEL"),
-            ("2.2", "PEN", "TEM_PEN"),
-            ("2.3", "Fixa UP", "TEM_FIXA + !MOVEL + !FIDELIZADO"),
-            ("2.4", "Renovacao Fixa", "TEM_FIXA + FIDELIZADO"),
-            ("3.1", "CAR", "CAR_TOTAL>0"),
-            ("3.2", "Biometria", "!BIOMETRADO"),
-            ("3.3", "5G", "TEM_5G"),
-            ("3.4", "VTech Atual", "QTD_VTECH>0"),
-            ("3.5", "VTech Potencial", "QTD_VTECH=0 + VIVO_TECH preenchido"),
-            ("3.6", "Digital", "DIGITAL_1 preenchido"),
-        ]
-        for cod, nome, filtro in mailing_docs:
-            st.markdown(
-                '<div style="padding:8px 14px;border-radius:8px;background:var(--hover);'
-                'margin-bottom:6px;display:flex;justify-content:space-between;align-items:center;">'
-                '<span style="font-weight:600;color:var(--tx);font-size:0.84rem;">{} - {}</span>'
-                '<span style="font-size:0.74rem;color:var(--acc);font-family:monospace;'
-                'background:var(--acc-bg);padding:3px 8px;border-radius:4px;">{}</span>'
-                '</div>'.format(cod, nome, filtro), unsafe_allow_html=True)
-
-        st.markdown(divider(), unsafe_allow_html=True)
-        st.markdown(section_title("5. INFO_FONTE nos Mailings"), unsafe_allow_html=True)
-        st.markdown(info_box(
-            "Todo mailing tem coluna <strong>INFO_FONTE</strong> com: tabela de origem, "
-            "colunas e filtros usados, explicacao legivel. "
-            "Garante rastreabilidade total."
-        ), unsafe_allow_html=True)
-
-        st.markdown(divider(), unsafe_allow_html=True)
         st.markdown(section_title("6. Glossario"), unsafe_allow_html=True)
-        glossario = [
-            ("M", "Meses desde ativacao"), ("CAR", "Conta a Receber"),
-            ("BL", "Banda Larga"), ("VB", "Voz Basica"), ("FTTH", "Fibra ate o cliente"),
-            ("PEN", "Terminal metalico"), ("VVN", "Vivo Voz Negocio"),
-            ("Big Deal", "Fat. alto"), ("MEI", "Microempreendedor"),
-            ("Mancha", "Area FTTH"), ("Serasa", "Score credito"),
-            ("Blindagem", "Renovacao antecipada"), ("PM_*", "Dados do Parque Movel"),
-        ]
-        html = '<div style="display:grid;grid-template-columns:120px 1fr;gap:3px 12px;font-size:0.82rem;">'
-        for t, d in glossario:
-            html += '<div style="font-weight:600;color:var(--acc);font-family:monospace;padding:3px 0;">{}</div>'.format(t)
-            html += '<div style="color:var(--tx2);padding:3px 0;">{}</div>'.format(d)
-        html += '</div>'
-        st.markdown(html, unsafe_allow_html=True)
+        h = '<div style="display:grid;grid-template-columns:100px 1fr;gap:2px 10px;font-size:0.8rem;">'
+        for t,d in [("M","Meses contrato"),("CAR","Conta a Receber"),("BL","Banda Larga"),("FTTH","Fibra optica"),
+                    ("PEN","Terminal metalico"),("VVN","PABX virtual"),("Serasa","Score credito"),("PM_*","Dados Parque Movel")]:
+            h += '<div style="font-weight:600;color:var(--acc);font-family:monospace;">{}</div><div style="color:var(--tx2);">{}</div>'.format(t,d)
+        h += '</div>'
+        st.markdown(h, unsafe_allow_html=True)
+        st.markdown(footer_html(), unsafe_allow_html=True)
+    ti += 1
 
-        st.markdown(footer_html(APP_VERSION), unsafe_allow_html=True)
+
+# ===== CONFIG =====
+
+if df_mapa is not None:
+    with tabs[ti]:
+        st.markdown(breadcrumb(["Sistema", "Config"]), unsafe_allow_html=True)
+        st.markdown(page_header("Configuracoes", "Webhook Bitrix24, banco de dados e integracoes."), unsafe_allow_html=True)
+
+        # Status do banco
+        st.markdown(section_title("Banco de Dados"), unsafe_allow_html=True)
+        db_status = db.status()
+        st.markdown(kpi_grid([
+            kpi_card("Backend", db_status.get("backend", "?"), accent=True),
+            kpi_card("Total Deals", "{:,}".format(db_status.get("total_deals", 0))),
+            kpi_card("Ultima Sync", str(db_status.get("ultima_atualizacao", "nunca"))[:16]),
+        ]), unsafe_allow_html=True)
+
+        st.markdown(divider(), unsafe_allow_html=True)
+
+        # Webhook Bitrix
+        st.markdown(section_title("Webhook Bitrix24"), unsafe_allow_html=True)
+        st.markdown(info_box(
+            "Configure o webhook para sincronizar deals automaticamente.<br>"
+            "<strong>Como obter:</strong> Bitrix24 > Aplicativos > Webhooks > Adicionar webhook de entrada.<br>"
+            "Permissoes necessarias: <strong>crm</strong> e <strong>user</strong>."
+        ), unsafe_allow_html=True)
+
+        current_url = db.get_config("bitrix_webhook_url", "")
+        # Tambem checa secrets
+        try:
+            secret_url = st.secrets.get("BITRIX_WEBHOOK_URL", "")
+            if secret_url and not current_url:
+                current_url = secret_url
+        except:
+            pass
+        new_url = st.text_input("URL do Webhook", value=current_url, key="wh_url",
+                               placeholder="https://miraitelecom.bitrix24.com.br/rest/1/abc123/")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("Salvar Webhook", key="save_wh"):
+                if new_url.strip():
+                    db.set_config("bitrix_webhook_url", new_url.strip())
+                    st.success("Webhook salvo!")
+                    st.rerun()
+        with c2:
+            if st.button("Testar Conexao", key="test_wh"):
+                if new_url.strip() and HAS_WEBHOOK:
+                    ok, msg = test_webhook(new_url.strip())
+                    if ok:
+                        st.success(msg)
+                    else:
+                        st.error(msg)
+                elif not HAS_WEBHOOK:
+                    st.warning("Modulo requests nao instalado. pip install requests")
+                else:
+                    st.warning("Preencha a URL primeiro.")
+
+        st.markdown(divider(), unsafe_allow_html=True)
+
+        # Supabase
+        st.markdown(section_title("Supabase (Cloud)"), unsafe_allow_html=True)
+        st.markdown(info_box(
+            "Para persistir dados na nuvem, configure as variaveis de ambiente:<br>"
+            "<strong>SUPABASE_URL</strong> e <strong>SUPABASE_KEY</strong><br>"
+            "Sem Supabase, o sistema usa SQLite local (funciona normalmente)."
+        ), unsafe_allow_html=True)
+
+        if db.use_supabase:
+            st.markdown('<div style="display:flex;align-items:center;gap:6px;font-size:0.84rem;">'
+                       '<span style="width:8px;height:8px;border-radius:50%;background:var(--success);"></span>'
+                       '<span style="color:var(--tx2);">Supabase conectado</span></div>', unsafe_allow_html=True)
+        else:
+            st.markdown('<div style="display:flex;align-items:center;gap:6px;font-size:0.84rem;">'
+                       '<span style="width:8px;height:8px;border-radius:50%;background:var(--tx3);"></span>'
+                       '<span style="color:var(--tx3);">SQLite local ativo</span></div>', unsafe_allow_html=True)
+
+        st.markdown(divider(), unsafe_allow_html=True)
+
+        # Historico de mailings
+        st.markdown(section_title("Historico de Mailings"), unsafe_allow_html=True)
+        mlog = db.get_mailing_log(20)
+        if not mlog.empty:
+            st.dataframe(mlog, use_container_width=True, hide_index=True, height=300)
+        else:
+            st.markdown(info_box("Nenhum mailing gerado ainda."), unsafe_allow_html=True)
+
+        st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
