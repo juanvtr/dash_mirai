@@ -3,7 +3,7 @@
 Mirai Insights - Integracao Bitrix24 via Webhook.
 
 Usa a REST API do Bitrix24 para buscar deals sem precisar de upload manual.
-Requer: BITRIX_WEBHOOK_URL no formato https://seudominio.bitrix24.com.br/rest/USER_ID/WEBHOOK_KEY/
+Requer: BITRIX_WEBHOOK_URL no formato https://mirai.bitrix24.com.br/rest/647/0ou78cunq7kh0y31/crm.deal.list.json?start=0&limit=1
 
 Endpoints usados:
   - crm.deal.list: listar deals com filtros
@@ -21,7 +21,7 @@ def fetch_deals(webhook_url, status_callback=None):
     Busca TODOS os deals do Bitrix24 via webhook (paginado, 50 por vez).
     
     Args:
-        webhook_url: URL do webhook (ex: https://xxx.bitrix24.com.br/rest/1/abc123/)
+        webhook_url: URL do webhook (https://mirai.bitrix24.com.br/rest/647/0ou78cunq7kh0y31/crm.deal.list.json?start=0&limit=1)
         status_callback: funcao opcional para reportar progresso (recebe string)
     
     Returns:
@@ -216,17 +216,25 @@ def process_webhook_deals(df_raw, df_users=None):
         user_map = df_users.set_index("USER_ID")["NOME_COMPLETO"].to_dict()
         df["RESPONSAVEL"] = df["ASSIGNED_BY_ID"].astype(str).map(user_map).fillna("ID:" + df["ASSIGNED_BY_ID"].astype(str))
     else:
-        df["RESPONSAVEL"] = df.get("ASSIGNED_BY_ID", "N/A").astype(str)
+        if "ASSIGNED_BY_ID" in df.columns:
+            df["RESPONSAVEL"] = df["ASSIGNED_BY_ID"].astype(str)
+        else:
+            df["RESPONSAVEL"] = "N/A"
 
-    # Nome do deal = TITLE (ex: "Adriana Costa da Silva", "Rosmar Gomes...")
-    df["NOME_NORM"] = df.get("TITLE", "").astype(str).str.upper().str.strip()
-    # Limpar CNPJs e codigos do titulo
-    df["NOME_NORM"] = df["NOME_NORM"].str.replace(r"^\d+\s+", "", regex=True)
-    df["NOME_NORM"] = df["NOME_NORM"].str.replace(r"\s*/\s*\d[\d./\-]*\s*", " ", regex=True).str.strip()
+    # Nome do deal = TITLE
+    if "TITLE" in df.columns:
+        df["NOME_NORM"] = df["TITLE"].astype(str).str.upper().str.strip()
+        df["NOME_NORM"] = df["NOME_NORM"].str.replace(r"^\d+\s+", "", regex=True)
+        df["NOME_NORM"] = df["NOME_NORM"].str.replace(r"\s*/\s*\d[\d./\-]*\s*", " ", regex=True).str.strip()
+    else:
+        df["NOME_NORM"] = ""
 
-    # CNPJ - webhook nao traz direto, usar COMPANY_ID pra buscar depois
+    # CNPJ - webhook nao traz direto
     df["CNPJ_NORM"] = ""
-    df["COMPANY_ID"] = df.get("COMPANY_ID", "0").astype(str)
+    if "COMPANY_ID" in df.columns:
+        df["COMPANY_ID"] = df["COMPANY_ID"].astype(str)
+    else:
+        df["COMPANY_ID"] = "0"
 
     return df
 
