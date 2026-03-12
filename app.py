@@ -77,8 +77,8 @@ def init_db():
     supa_url = None
     supa_key = None
     try:
-        supa_url = st.secrets.get("SUPABASE_URL")
-        supa_key = st.secrets.get("SUPABASE_KEY")
+        supa_url = st.secrets["SUPABASE_URL"]
+        supa_key = st.secrets["SUPABASE_KEY"]
     except:
         pass
     if not supa_url:
@@ -133,9 +133,12 @@ with st.sidebar:
     if HAS_WEBHOOK:
         webhook_url = ""
         try:
-            webhook_url = st.secrets.get("BITRIX_WEBHOOK_URL", "")
+            webhook_url = st.secrets["BITRIX_WEBHOOK_URL"]
         except:
-            pass
+            try:
+                webhook_url = os.environ.get("BITRIX_WEBHOOK_URL", "")
+            except:
+                pass
         if not webhook_url:
             webhook_url = db.get_config("bitrix_webhook_url", "")
 
@@ -791,22 +794,38 @@ if df_mapa is not None:
         ), unsafe_allow_html=True)
 
         current_url = db.get_config("bitrix_webhook_url", "")
-        # Tambem checa secrets
         try:
-            secret_url = st.secrets.get("BITRIX_WEBHOOK_URL", "")
+            secret_url = st.secrets["BITRIX_WEBHOOK_URL"]
             if secret_url and not current_url:
                 current_url = secret_url
         except:
             pass
+
+        # Limpar URL (remover endpoints acidentais como /crm.deal.list.json?...)
+        def _clean_webhook_url(u):
+            u = u.strip().rstrip("/")
+            # Remove qualquer endpoint que tenha sido colado junto
+            for suffix in ["/crm.deal.list.json", "/crm.deal.list", "/profile.json", "/profile"]:
+                if suffix in u:
+                    u = u.split(suffix)[0]
+            # Remove query params
+            if "?" in u:
+                u = u.split("?")[0]
+            return u.rstrip("/") + "/"
+
+        if current_url:
+            current_url = _clean_webhook_url(current_url)
+
         new_url = st.text_input("URL do Webhook", value=current_url, key="wh_url",
-                               placeholder="https://miraitelecom.bitrix24.com.br/rest/1/abc123/")
+                               placeholder="https://mirai.bitrix24.com.br/rest/647/abc123/")
 
         c1, c2 = st.columns(2)
         with c1:
             if st.button("Salvar Webhook", key="save_wh"):
                 if new_url.strip():
-                    db.set_config("bitrix_webhook_url", new_url.strip())
-                    st.success("Webhook salvo!")
+                    clean = _clean_webhook_url(new_url)
+                    db.set_config("bitrix_webhook_url", clean)
+                    st.success("Salvo: {}".format(clean))
                     st.rerun()
         with c2:
             if st.button("Testar Conexao", key="test_wh"):
