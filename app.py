@@ -27,6 +27,10 @@ from charts import (
     chart_blindagem, chart_planos_top, chart_m_por_cliente, chart_regua_m,
 )
 from db import MiraiDB
+from mailing_avancados import (
+    enriquecer_df_com_propensoes, gerar_mailings_produto,
+    get_filtros_disponiveis, gerar_mailing_custom_avancado,
+)
 
 # Tenta importar webhook (pode falhar se requests nao instalado)
 try:
@@ -220,8 +224,14 @@ if df_mapa is not None and df_movel_agg is not None:
     if "cruzamento_done" not in st.session_state:
         with st.spinner("Cruzando dados..."):
             df_mapa = cruzar_mapa_com_movel(df_mapa, df_movel_agg)
+            df_mapa = enriquecer_df_com_propensoes(df_mapa)
             st.session_state["df_mapa"] = df_mapa
             st.session_state["cruzamento_done"] = True
+
+# Enriquecer mesmo sem Parque Movel (so Mapa Parque)
+if df_mapa is not None and "TEM_PROP_VVN" not in df_mapa.columns:
+    df_mapa = enriquecer_df_com_propensoes(df_mapa)
+    st.session_state["df_mapa"] = df_mapa
 
 # Deals - via webhook/banco (sem upload manual)
 cnpjs_tratativa, nomes_tratativa = db.get_cnpjs_em_tratativa()
@@ -603,16 +613,121 @@ if df_mapa is not None:
         _sec("3.", "3. Cross-Sell e Totalizacao")
         st.markdown(divider(), unsafe_allow_html=True)
         _sec("4.", "4. Indicadores e Relacionamento")
+
+        # ===== MAILINGS POR PRODUTO =====
         st.markdown(divider_grad(), unsafe_allow_html=True)
-        st.markdown(section_title("Mailing Customizado"), unsafe_allow_html=True)
-        cn = st.text_input("Nome", value="CUSTOM", key="cn")
-        if st.button("Gerar", key="gc"):
-            if df_f is not None:
-                custom = gerar_mailing_customizado(df_f, cn)
-                st.success("{:,} clientes".format(len(custom)))
-                st.download_button("Baixar", data=to_csv(custom),
-                                  file_name="Mailing_{}_{}.csv".format(cn, datetime.now().strftime("%Y%m%d")),
-                                  mime="text/csv", key="dc")
+        st.markdown(section_title("5. Mailings por Produto e Propensao"), unsafe_allow_html=True)
+        st.markdown(info_box(
+            "Mailings gerados a partir das colunas de oferta (<strong>PRIMEIRA_OFERTA, VVN, DIGITAL_1/2/3, VIVO_TECH, AVANCADOS</strong>) "
+            "cruzadas com o nivel de propensao de cada cliente."
+        ), unsafe_allow_html=True)
+
+        mailings_prod = gerar_mailings_produto(df_mapa)
+        if mailings_prod:
+            cols_p = st.columns(2)
+            for i, (cod, (df_mp, titulo, desc)) in enumerate(mailings_prod.items()):
+                if len(df_mp) == 0:
+                    continue
+                # Aplicar filtro de deals
+                df_mp_filtered = df_mp
+                removidos = 0
+                if filtrar_deals and (cnpjs_tratativa or nomes_tratativa):
+                    df_mp_filtered, removidos = filtrar_mailing_sem_deals(df_mp, cnpjs_tratativa, nomes_tratativa)
+                with cols_p[i % 2]:
+                    st.markdown(mailing_card_html(cod.split("_")[0], titulo,
+                        len(df_mp_filtered), desc,
+                        "Removidos deals: {}".format(removidos) if removidos else "",
+                        "#06B6D4"), unsafe_allow_html=True)
+                    # Montar mailing pra download
+                    from data_processing import _montar_mailing
+                    ml_export = _montar_mailing(df_mp_filtered, cod, titulo, desc,
+                        info_fonte="FONTE: Propensao/Oferta | {}".format(desc))
+                    if len(ml_export) > 0:
+                        st.download_button("Baixar {} ({:,})".format(cod[:6], len(ml_export)),
+                            data=to_csv(ml_export),
+                            file_name="Mailing_{}_{}.csv".format(cod, datetime.now().strftime("%Y%m%d")),
+                            mime="text/csv", key="mp_{}".format(cod))
+
+        # ===== GERADOR CUSTOMIZADO AVANCADO =====
+        st.markdown(divider_grad(), unsafe_allow_html=True)
+        st.markdown(section_title("Gerador de Mailing Customizado"), unsafe_allow_html=True)
+        st.markdown(info_box(
+            "Monte seu mailing combinando filtros. O resultado exclui automaticamente clientes em tratativa no Bitrix."
+        ), unsafe_allow_html=True)
+
+        filtros_disp = get_filtros_disponiveis(df_mapa)
+
+        c1, c2 = st.columns(2)
+        with c1:
+            sel_produtos = st.multiselect("Produtos", filtros_disp.get("produtos", []), key="cust_prod")
+            sel_propensao = st.selectbox("Propensao minima", ["Todos", "Muito Alta", "Alta", "Média", "Baixa"], key="cust_prop")
+            sel_ofertas = st.multiselect("Contem oferta de", filtros_disp.get("ofertas", []), key="cust_oferta")
+            sel_trilha = st.selectbox("Trilha", ["Todos"] + filtros_disp.get("trilhas", []), key="cust_trilha")
+        with c2:
+            sel_segmento = st.selectbox("Segmento", ["Todos"] + filtros_disp.get("segmentos", []), key="cust_seg")
+            sel_semaforo = st.selectbox("Semaforo", ["Todos"] + filtros_disp.get("semaforos", []), key="cust_sem")
+            sel_mancha = st.checkbox("Apenas mancha FTTH", key="cust_mancha")
+            sel_big = st.checkbox("Apenas Big Deal", key="cust_big")
+            sel_nao_fid = st.checkbox("Apenas nao fidelizado", key="cust_nfid")
+            c_m1, c_m2 = st.columns(2)
+            with c_m1:
+                sel_m_min = st.number_input("M minimo", min_value=0, max_value=999, value=0, key="cust_mmin")
+            with c_m2:
+                sel_m_max = st.number_input("M maximo", min_value=0, max_value=999, value=999, key="cust_mmax")
+
+        nome_custom = st.text_input("Nome do mailing", value="CUSTOM", key="cust_nome")
+
+        if st.button("Gerar Mailing", key="gen_cust_av"):
+            filtros_app = {}
+            if sel_produtos:
+                filtros_app["produtos"] = sel_produtos
+            if sel_propensao != "Todos":
+                filtros_app["propensao_min"] = sel_propensao
+            if sel_ofertas:
+                filtros_app["oferta_contem"] = sel_ofertas
+            if sel_trilha != "Todos":
+                filtros_app["trilha"] = sel_trilha
+            if sel_segmento != "Todos":
+                filtros_app["segmento"] = sel_segmento
+            if sel_semaforo != "Todos":
+                filtros_app["semaforo"] = sel_semaforo
+            if sel_mancha:
+                filtros_app["apenas_mancha"] = True
+            if sel_big:
+                filtros_app["apenas_big_deal"] = True
+            if sel_nao_fid:
+                filtros_app["apenas_nao_fidelizado"] = True
+            if sel_m_min > 0:
+                filtros_app["m_min"] = sel_m_min
+            if sel_m_max < 999:
+                filtros_app["m_max"] = sel_m_max
+
+            result = gerar_mailing_custom_avancado(df_mapa, filtros_app)
+
+            # Filtrar deals
+            removidos = 0
+            if cnpjs_tratativa or nomes_tratativa:
+                result, removidos = filtrar_mailing_sem_deals(result, cnpjs_tratativa, nomes_tratativa, cnpj_col="NR_CNPJ", nome_col="NOME_CLIENTE")
+
+            if len(result) > 0:
+                filtro_desc = " | ".join("{}={}".format(k, v) for k, v in filtros_app.items())
+                from data_processing import _montar_mailing
+                ml = _montar_mailing(result, nome_custom, "CUSTOM: " + filtro_desc, filtro_desc,
+                    info_fonte="CUSTOM | " + filtro_desc)
+
+                st.success("{:,} clientes encontrados{}".format(len(ml),
+                    " ({:,} removidos por deals)".format(removidos) if removidos else ""))
+                st.download_button("Baixar {} ({:,})".format(nome_custom, len(ml)),
+                    data=to_csv(ml),
+                    file_name="Mailing_{}_{}.csv".format(nome_custom, datetime.now().strftime("%Y%m%d")),
+                    mime="text/csv", key="dl_cust_av")
+                # Preview
+                preview_cols = ["NR_CNPJ", "NOME_CLIENTE", "SEGMENTO", "CURVA_ABC", "PM_FAT_TOTAL"]
+                avail = [c for c in preview_cols if c in result.columns]
+                st.dataframe(result[avail].head(20), use_container_width=True, hide_index=True, height=300)
+            else:
+                st.warning("Nenhum cliente encontrado com esses filtros.")
+
         st.markdown(footer_html(), unsafe_allow_html=True)
     ti += 1
 
