@@ -1,8 +1,8 @@
-# Mirai Insights v3.0 - Dashboard B2B Vivo
+ - Dashboard B2B telecom
 
 ## O que e este app
 
-Dashboard Streamlit para analise completa da carteira B2B da Mirai Telecom (parceira Vivo).
+Dashboard Streamlit para analise completa da carteira B2B de uma (parceira Vivo).
 Integra 3 fontes de dados e gera mailings automatizados conforme o PDF "Raio X Carteira".
 
 ---
