@@ -285,4 +285,5 @@ um modulo `db.py` que substitui o upload por queries ao banco.
 
 ---
 
-*Mirai Telecom - Data Analytics - 2026*
+*Juan Vieira - Data Engineer - 2026*
+
