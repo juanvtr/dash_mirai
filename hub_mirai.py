@@ -1,0 +1,2960 @@
+"""
+Hub de Carteira — Mirai Telecom · v11
+Design editorial moderno: topbar real com branding vivo, tagline com efeito de digitação,
+sem hero gigante, popover claro e gráficos corrigidos para Streamlit Cloud.
+"""
+from __future__ import annotations
+import duckdb
+import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
+import streamlit as st
+import streamlit.components.v1 as components
+
+st.set_page_config(page_title="Hub Mirai", page_icon="M", layout="wide",
+                   initial_sidebar_state="collapsed")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# CSS PREMIUM — dark enterprise roxo/grafite, sem emojis coloridos
+# ══════════════════════════════════════════════════════════════════════════════
+CSS = """
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter+Tight:wght@500;700;800;900&display=swap');
+
+:root {
+    --bg:       #f2f0f6;
+    --bg2:      #fcfbfd;
+    --card:     #ffffff;
+    --card2:    #f8f6fb;
+    --card3:    #ece7f4;
+    --border:   rgba(106,86,153,0.16);
+    --border2:  rgba(106,86,153,0.08);
+
+    --ink:      #251d35;
+    --muted:    #625a72;
+    --dim:      #8b8598;
+
+    --purple:   #6957b8;
+    --purple2:  #7763c6;
+    --purple3:  #8974d6;
+    --purple4:  #a896db;
+    --lilac:    #ece6f8;
+    --pink:     #9f54c1;
+    --fuchsia:  #c589da;
+
+    --green:    #10b981;
+    --amber:    #f59e0b;
+    --red:      #ef4444;
+    --sky:      #0284c7;
+
+    --radius:   16px;
+    --radius-sm:10px;
+    --radius-lg:22px;
+    --radius-pill:999px;
+
+    --shadow:   0 10px 26px rgba(37,29,53,0.08), 0 0 0 1px var(--border);
+    --shadow-lg:0 18px 38px rgba(37,29,53,0.11), 0 0 0 1px rgba(106,86,153,0.18);
+    --glow:     0 12px 30px rgba(105,87,184,0.10);
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+    font-family: 'Inter', -apple-system, sans-serif !important;
+}
+
+html, body { background: var(--bg) !important; color: var(--ink) !important; }
+.stApp { background: var(--bg) !important; color: var(--ink) !important; }
+
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(circle at 8% 6%, rgba(105,87,184,0.10), transparent 26%),
+        radial-gradient(circle at 92% 7%, rgba(159,84,193,0.05), transparent 22%),
+        linear-gradient(180deg, #f8f7fb 0%, #f3f0f7 46%, #fcfbfd 100%) !important;
+}
+
+[data-testid="stHeader"], #MainMenu, footer {
+    display: none !important;
+    visibility: hidden !important;
+}
+[data-testid="stSidebar"] { display: none !important; }
+[data-testid="stDecoration"] { display: none !important; }
+
+.block-container {
+    max-width: 1400px !important;
+    padding: 0 1.5rem 4rem !important;
+}
+
+/* Fundo animado antigo fica desligado para reduzir ruído visual */
+#mirai-canvas { display: none !important; }
+
+/* ── scrollbar ── */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #efebf5; }
+::-webkit-scrollbar-thumb { background: #b9accf; border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+
+/* ── nav sticky clara ── */
+.nav-wrap {
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(250,249,252,0.88);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 10px 12px;
+    margin: 12px 0 18px;
+    box-shadow: var(--shadow);
+}
+
+[data-testid="stRadio"] > label { display: none !important; }
+
+[data-testid="stRadio"] div[role="radiogroup"] {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    justify-content: center !important;
+    background: transparent !important;
+}
+
+[data-testid="stRadio"] label {
+    background: #ffffff !important;
+    border: 1px solid rgba(124,58,237,0.14) !important;
+    border-radius: var(--radius-pill) !important;
+    padding: 8px 17px !important;
+    transition: all .15s ease !important;
+    cursor: pointer !important;
+    box-shadow: 0 3px 10px rgba(31,20,49,0.04) !important;
+}
+
+[data-testid="stRadio"] label:hover {
+    background: #f1edf7 !important;
+    border-color: rgba(124,58,237,0.32) !important;
+    transform: translateY(-1px);
+}
+
+[data-testid="stRadio"] label p,
+[data-testid="stRadio"] label span,
+[data-testid="stRadio"] label div {
+    color: #352d46 !important;
+    font-size: .82rem !important;
+    font-weight: 800 !important;
+    letter-spacing: .01em !important;
+}
+
+[data-testid="stRadio"] label:has(input:checked) {
+    background: linear-gradient(135deg, var(--purple), var(--purple2)) !important;
+    border-color: transparent !important;
+    box-shadow: 0 8px 18px rgba(105,87,184,0.16) !important;
+}
+
+[data-testid="stRadio"] label:has(input:checked) p,
+[data-testid="stRadio"] label:has(input:checked) span,
+[data-testid="stRadio"] label:has(input:checked) div {
+    color: #fff !important;
+}
+
+[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child,
+[data-testid="stRadio"] input[type="radio"] {
+    display: none !important;
+}
+
+/* ── hero limpo ── */
+.hero {
+    min-height: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+    padding: 56px 24px 50px;
+    margin: 16px 0 12px;
+    position: relative;
+    overflow: hidden;
+
+    background:
+        radial-gradient(circle at 20% 0%, rgba(124,58,237,0.16), transparent 30%),
+        radial-gradient(circle at 86% 10%, rgba(192,38,211,0.10), transparent 24%),
+        linear-gradient(180deg, #ffffff 0%, #fbf9ff 100%);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    box-shadow: var(--shadow-lg);
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(124,58,237,0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,0.045) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,.55), transparent 78%);
+    pointer-events: none;
+}
+
+.hero-kicker {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #efebf5;
+    border: 1px solid rgba(124,58,237,0.18);
+    border-radius: var(--radius-pill);
+    padding: 7px 16px;
+    margin-bottom: 26px;
+    font-size: .72rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--purple);
+    position: relative;
+    z-index: 2;
+}
+
+.hero-kicker .dot {
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--green);
+    box-shadow: 0 0 0 5px rgba(16,185,129,0.12);
+}
+
+.hero-title {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    font-size: clamp(2.3rem, 5vw, 4.6rem);
+    font-weight: 900;
+    letter-spacing: -0.055em;
+    line-height: 1;
+    margin: 0 0 20px;
+    color: var(--ink);
+    position: relative;
+    z-index: 2;
+}
+
+.hero-title .accent {
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+}
+
+.hero-title .outline {
+    color: #3a2a55;
+    -webkit-text-stroke: 0;
+}
+
+.hero-sub {
+    font-size: clamp(.96rem, 1.5vw, 1.1rem);
+    color: var(--muted);
+    max-width: 680px;
+    line-height: 1.6;
+    margin: 0 auto 34px;
+    font-weight: 500;
+    position: relative;
+    z-index: 2;
+}
+
+.hero-stats {
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding-top: 24px;
+    border-top: 1px solid var(--border2);
+    margin-top: 4px;
+    position: relative;
+    z-index: 2;
+}
+
+.hero-stat-val {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: -.04em;
+    color: var(--ink);
+}
+
+.hero-stat-lbl {
+    font-size: .68rem;
+    color: var(--dim);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-top: 2px;
+}
+
+/* ── seções ── */
+.sec-head {
+    margin: 42px 0 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.sec-title {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    font-size: 1.22rem;
+    font-weight: 900;
+    color: var(--ink);
+    letter-spacing: -.03em;
+}
+
+.sec-sub {
+    font-size: .78rem;
+    color: var(--muted);
+    font-weight: 600;
+}
+
+.sec-badge {
+    margin-left: auto;
+    background: #efebf5;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 4px 12px;
+    font-size: .68rem;
+    font-weight: 800;
+    color: var(--purple);
+    letter-spacing: .06em;
+}
+
+/* ── metric card ── */
+.mc {
+    background:
+        radial-gradient(circle at 100% 0%, rgba(124,58,237,0.08), transparent 32%),
+        linear-gradient(180deg, #ffffff 0%, #fcfbff 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 20px 16px;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    box-shadow: var(--shadow);
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+
+.mc:hover {
+    border-color: rgba(124,58,237,.30);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-1px);
+}
+
+.mc::before {
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+    height:3px;
+    border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.mc.cp::before  { background: linear-gradient(90deg, var(--purple), var(--pink)); }
+.mc.cg::before  { background: var(--green); }
+.mc.cr::before  { background: var(--red); }
+.mc.ca::before  { background: var(--amber); }
+.mc.cs::before  { background: var(--sky); }
+
+.mc::after {
+    content:'';
+    position:absolute;
+    right:-30px;
+    bottom:-30px;
+    width:100px;
+    height:100px;
+    border-radius:50%;
+    background: radial-gradient(circle, rgba(124,58,237,.08), transparent 70%);
+    pointer-events:none;
+}
+
+.mc-label {
+    font-size: .65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--dim);
+    margin-bottom: 8px;
+}
+
+.mc-value {
+    font-family: 'Inter Tight', 'Inter', sans-serif;
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: -.04em;
+    color: var(--ink);
+    line-height: 1;
+    margin-bottom: 6px;
+}
+
+.mc-delta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: .72rem;
+    font-weight: 800;
+    margin-bottom: 3px;
+}
+.mc-delta.up   { color: #059669; }
+.mc-delta.down { color: #dc2626; }
+.mc-delta.neu  { color: var(--dim); }
+.mc-delta svg  { flex-shrink: 0; }
+
+.mc-sub { font-size: .70rem; color: var(--muted); font-weight: 600; }
+.mc-bar { margin-top: 12px; }
+.mc-bar-bg { background: rgba(124,58,237,.10); border-radius: var(--radius-pill); height: 5px; }
+.mc-bar-fill { border-radius: var(--radius-pill); height: 5px; transition: width .6s ease; }
+
+/* ── chips ── */
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: .63rem;
+    font-weight: 900;
+    letter-spacing: .05em;
+}
+.ch-p0 { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.ch-p1 { background: #fae8ff; color: #a21caf; border: 1px solid #f5d0fe; }
+.ch-p2 { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.ch-p3 { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+.ch-p4 { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+
+/* ── insight card ── */
+.ic {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--purple);
+    border-radius: var(--radius-sm);
+    padding: 13px 15px;
+    margin-bottom: 9px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    box-shadow: var(--shadow);
+}
+
+.ic-sym {
+    font-size: 1rem;
+    flex-shrink: 0;
+    line-height: 1.4;
+}
+
+.ic-title {
+    font-size: .82rem;
+    font-weight: 900;
+    margin-bottom: 3px;
+    color: var(--ink);
+}
+
+.ic-text {
+    font-size: .73rem;
+    color: var(--muted);
+    line-height: 1.45;
+    font-weight: 550;
+}
+
+/* ── trend card ── */
+.trend-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: var(--shadow);
+}
+.trend-arrow { font-size: 1.6rem; flex-shrink: 0; font-family: monospace; }
+.trend-arrow.up   { color: #059669; }
+.trend-arrow.down { color: #dc2626; }
+.trend-arrow.neu  { color: var(--amber); }
+.trend-label { font-size: .66rem; color: var(--dim); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.trend-val { font-family:'Inter Tight','Inter',sans-serif; font-size:1.4rem; font-weight:900; color:var(--ink); letter-spacing:-.03em; margin: 2px 0; }
+.trend-sub { font-size: .70rem; color: var(--muted); font-weight: 600; }
+
+/* ── carrossel ── */
+.carousel-shell { position: relative; margin: 4px 0 12px; }
+.carousel-track {
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
+    padding: 6px 4px 20px;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(124,58,237,.35) transparent;
+}
+.carousel-track::-webkit-scrollbar { height: 5px; }
+.carousel-track::-webkit-scrollbar-track { background: transparent; }
+.carousel-track::-webkit-scrollbar-thumb { background: rgba(124,58,237,.35); border-radius: 5px; }
+
+.cslide {
+    flex: 0 0 auto;
+    width: 280px;
+    min-height: 200px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
+    scroll-snap-align: start;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow);
+}
+.cslide:hover { border-color: rgba(124,58,237,.30); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+.cslide-urgency { display: inline-block; font-size: .62rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; padding: 4px 10px; border-radius: var(--radius-pill); margin-bottom: 10px; align-self: flex-start; }
+.cslide-title { font-size: .94rem; font-weight: 900; color: var(--ink); margin-bottom: 8px; letter-spacing: -.01em; }
+.cslide-stats { display: flex; gap: 16px; margin: 8px 0 10px; }
+.cslide-val { font-family:'Inter Tight','Inter',sans-serif; font-size:1.3rem; font-weight:900; color:var(--purple); line-height:1.1; word-break:break-word; }
+.cslide-lbl { font-size:.62rem; color:var(--dim); font-weight:800; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+.cslide-desc { font-size:.76rem; color:var(--muted); line-height:1.5; flex-grow:1; font-weight:550; }
+
+/* ── health bar ── */
+.hb-bg   { background: rgba(124,58,237,.11); border-radius:var(--radius-pill); height:5px; margin-top:8px; }
+.hb-fill { border-radius:var(--radius-pill); height:5px; transition: width .6s ease; }
+
+/* ── client card ── */
+.clc {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    transition: border-color .15s, box-shadow .15s;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
+}
+.clc:hover { border-color: rgba(124,58,237,.30); box-shadow: var(--shadow-lg); }
+.clc-name { font-size: .90rem; font-weight: 900; color: var(--ink); margin-bottom: 2px; }
+.clc-sector { font-size: .70rem; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+.clc-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border2); font-size:.74rem; }
+.clc-key { color: var(--dim); font-weight: 700; }
+.clc-val { color: var(--ink); font-weight: 850; text-align: right; }
+
+/* ── ficha row ── */
+.fr { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border2); font-size:.82rem; }
+.fl { color:var(--dim); font-weight:700; }
+.fv { color:var(--ink); font-weight:850; text-align:right; }
+
+/* ── strategy card ── */
+.strategy {
+    background:
+        radial-gradient(circle at 100% 0%, rgba(124,58,237,.10), transparent 28%),
+        linear-gradient(135deg, #ffffff, #f7f2ff);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+}
+.strategy-kicker { font-size:.64rem; font-weight:900; text-transform:uppercase; letter-spacing:.1em; color:var(--purple); margin-bottom:8px; }
+.strategy-title  { font-size:1.05rem; font-weight:900; color:var(--ink); margin-bottom:8px; letter-spacing:-.02em; }
+.strategy-body   { font-size:.84rem; color:var(--muted); line-height:1.6; font-weight:550; }
+
+/* ── inputs ── */
+.stTextInput input,
+.stSelectbox [data-baseweb="select"] > div,
+.stMultiSelect [data-baseweb="select"] > div,
+.stNumberInput input {
+    background: #ffffff !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
+    min-height: 42px !important;
+}
+.stTextInput input:focus { border-color: var(--purple) !important; box-shadow: 0 0 0 3px rgba(124,58,237,.14) !important; }
+
+/* ── buttons ── */
+.stButton > button,
+.stDownloadButton > button {
+    background: linear-gradient(135deg, var(--purple), var(--purple2)) !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: var(--radius-pill) !important;
+    font-weight: 800 !important;
+    min-height: 42px !important;
+    box-shadow: 0 8px 20px rgba(124,58,237,.20) !important;
+    transition: transform .15s, box-shadow .15s !important;
+}
+.stButton > button:hover,
+.stDownloadButton > button:hover { transform: translateY(-1px) !important; box-shadow: 0 12px 30px rgba(124,58,237,.24) !important; }
+
+/* ── dataframe e gráficos ── */
+[data-testid="stDataFrame"] {
+    background: #fdfcff !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    overflow: hidden !important;
+    box-shadow: var(--shadow) !important;
+}
+
+[data-testid="stPlotlyChart"] {
+    background: #fdfcff !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    padding: 10px !important;
+    box-shadow: var(--shadow) !important;
+}
+
+label, .stCaption, .stMarkdown p { color: var(--muted) !important; }
+
+/* ── export card ── */
+.export-card { background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+.export-title { font-size:.84rem; font-weight:900; color:var(--ink); margin-bottom:12px; }
+
+/* ── page header ── */
+.ph {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+    margin: 18px 0 28px;
+}
+.ph h2 { font-family: 'Inter Tight', 'Inter', sans-serif; font-size: 1.55rem; font-weight: 900; color: var(--ink); letter-spacing: -.04em; margin: 0 0 5px; }
+.ph p { color: var(--muted); font-size: .86rem; margin: 0; font-weight: 550; }
+
+/* ── empty ── */
+.empty { background: #ffffff; border: 1px dashed var(--border); border-radius: var(--radius); padding: 48px; text-align: center; box-shadow: var(--shadow); }
+.empty-text { font-size: .88rem; color: var(--muted); }
+
+/* ── slider ── */
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: var(--purple) !important;
+    border: 2px solid #ffffff !important;
+    box-shadow: 0 3px 10px rgba(105,87,184,0.18) !important;
+}
+.stSlider [data-baseweb="slider"] > div > div > div {
+    background: rgba(105,87,184,0.18) !important;
+}
+.stSlider [data-baseweb="slider"] > div > div > div > div {
+    background: linear-gradient(90deg, var(--purple2), var(--purple)) !important;
+}
+.stSlider p, .stSlider label { color: var(--muted) !important; }
+
+/* ── expander ── */
+.streamlit-expanderHeader { background: #ffffff !important; border: 1px solid var(--border) !important; border-radius: var(--radius-sm) !important; color: var(--ink) !important; }
+
+
+.soft-note {
+    background: #f8f6fb;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: var(--muted);
+    font-size: .74rem;
+    line-height: 1.5;
+    margin: 8px 0 14px;
+}
+.soft-note strong { color: var(--ink); }
+.chart-help {
+    color: var(--muted);
+    font-size: .72rem;
+    margin-top: -6px;
+    margin-bottom: 8px;
+}
+
+@media (max-width: 900px) {
+    .hero { min-height: auto; padding: 42px 20px; }
+    .hero-title { font-size: 2.55rem; }
+    .nav-wrap { border-radius: 18px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   V8 — SquadEasy-inspired, sem copiar: nav flutuante, hero editorial, clean
+   ══════════════════════════════════════════════════════════════════════════════ */
+:root {
+    --bg:       #eee8df;
+    --bg2:      #f6f1ea;
+    --card:     #fffdf9;
+    --card2:    #f8f3ec;
+    --card3:    #eee6dc;
+    --border:   rgba(44,31,59,0.12);
+    --border2:  rgba(44,31,59,0.07);
+
+    --ink:      #15111d;
+    --muted:    #625a6f;
+    --dim:      #8a8194;
+
+    --purple:   #5b4aa0;
+    --purple2:  #6f5bb7;
+    --purple3:  #8671cc;
+    --purple4:  #a896db;
+    --lilac:    #eee9fb;
+    --pink:     #b15b9c;
+    --fuchsia:  #cc73b8;
+
+    --surface-warm: #fffaf3;
+    --surface-cold: #f9f6ff;
+
+    --shadow:   0 14px 36px rgba(36, 27, 47, 0.09), 0 0 0 1px var(--border);
+    --shadow-lg:0 24px 62px rgba(36, 27, 47, 0.16), 0 0 0 1px rgba(44,31,59,0.10);
+    --glow:     0 20px 48px rgba(91, 74, 160, 0.14);
+}
+
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(circle at 7% 9%, rgba(111,91,183,.10), transparent 24%),
+        radial-gradient(circle at 94% 4%, rgba(177,91,156,.07), transparent 20%),
+        linear-gradient(180deg, #efe4d4 0%, #f2eee8 42%, #faf7f2 100%) !important;
+}
+
+.block-container {
+    max-width: 1420px !important;
+    padding: 0 1.7rem 4rem !important;
+}
+
+/* Floating pill navbar like a modern SaaS landing */
+.nav-wrap {
+    position: sticky !important;
+    top: 14px !important;
+    z-index: 1000 !important;
+    max-width: 1180px !important;
+    margin: 14px auto 24px !important;
+    padding: 12px 174px 12px 174px !important;
+    min-height: 68px !important;
+    border-radius: 24px !important;
+    background: rgba(255, 248, 238, 0.84) !important;
+    border: 1px solid rgba(43,31,47,0.10) !important;
+    box-shadow: 0 18px 42px rgba(44, 31, 59, 0.13) !important;
+    backdrop-filter: blur(20px) saturate(155%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(155%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.nav-wrap::before {
+    content: "mirai\\A hub";
+    white-space: pre;
+    position: absolute;
+    left: 28px;
+    top: 17px;
+    color: #111018;
+    font-family: 'Inter Tight','Inter',sans-serif !important;
+    font-size: 1.02rem;
+    line-height: .82;
+    font-weight: 950;
+    letter-spacing: -.06em;
+}
+
+.nav-wrap::after {
+    content: "AÇÕES  →";
+    position: absolute;
+    right: 18px;
+    top: 14px;
+    background: #111018;
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 999px;
+    font-weight: 900;
+    font-size: .74rem;
+    letter-spacing: .02em;
+    box-shadow: 0 10px 22px rgba(17,16,24,.16);
+}
+
+.nav-wrap [data-testid="stRadio"] div[role="radiogroup"] {
+    justify-content: center !important;
+    gap: 3px !important;
+    flex-wrap: nowrap !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 10px 12px !important;
+    border-radius: 999px !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label p,
+.nav-wrap [data-testid="stRadio"] label span,
+.nav-wrap [data-testid="stRadio"] label div {
+    color: #261f30 !important;
+    font-weight: 780 !important;
+    font-size: .78rem !important;
+    letter-spacing: -.01em !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label:hover {
+    background: rgba(255,255,255,.56) !important;
+    transform: none !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) {
+    background: rgba(91,74,160,.11) !important;
+    box-shadow: inset 0 0 0 1px rgba(91,74,160,.10) !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) p,
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) span,
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) div {
+    color: #5b4aa0 !important;
+}
+
+.nav-wrap:hover {
+    box-shadow: 0 22px 54px rgba(44,31,59,.18) !important;
+}
+
+/* Hero editorial full-width */
+.hero {
+    min-height: 74vh !important;
+    margin: 18px 0 38px !important;
+    padding: 88px 28px 80px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 36px 3% 22px;
+    border-radius: 42px;
+    background:
+        radial-gradient(circle at 18% 20%, rgba(91,74,160,.12), transparent 23%),
+        radial-gradient(circle at 84% 16%, rgba(177,91,156,.09), transparent 21%),
+        linear-gradient(180deg, rgba(255,250,243,.66), rgba(255,255,255,.24));
+    border: 1px solid rgba(44,31,59,.08);
+    box-shadow: 0 22px 62px rgba(44,31,59,.08);
+    pointer-events: none;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,.9), rgba(0,0,0,.55) 76%, transparent);
+}
+
+.hero-kicker {
+    background: rgba(255,255,255,.48) !important;
+    border: 1px solid rgba(91,74,160,.18) !important;
+    color: #5b4aa0 !important;
+    margin-bottom: 24px !important;
+    box-shadow: 0 8px 22px rgba(44,31,59,.07);
+}
+
+.hero-title {
+    max-width: 1060px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    color: #08070c !important;
+    font-size: clamp(3rem, 6.8vw, 6.2rem) !important;
+    line-height: .92 !important;
+    letter-spacing: -.075em !important;
+    text-transform: uppercase;
+}
+
+.hero-title .accent {
+    background: linear-gradient(135deg, #5b4aa0 0%, #b15b9c 78%) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+}
+
+.hero-title .outline {
+    color: #08070c !important;
+}
+
+.hero-sub {
+    max-width: 700px !important;
+    color: #4f465d !important;
+    font-size: 1.02rem !important;
+    font-weight: 560 !important;
+}
+
+.hero::after {
+    content: "QSC ativo   •   M16 em foco   •   Cross-sell priorizado";
+    position: absolute;
+    left: 50%;
+    bottom: 48px;
+    transform: translateX(-50%);
+    background: #111018;
+    color: #fff;
+    border-radius: 999px;
+    padding: 14px 22px;
+    font-size: .78rem;
+    font-weight: 850;
+    letter-spacing: .02em;
+    box-shadow: 0 18px 42px rgba(17,16,24,.18);
+    z-index: 3;
+}
+
+.sec-head {
+    margin: 48px 0 16px !important;
+}
+
+.sec-title {
+    color: #14111d !important;
+    font-size: 1.26rem !important;
+}
+
+.sec-sub {
+    color: #6b6276 !important;
+    font-weight: 600 !important;
+}
+
+.sec-badge {
+    background: rgba(255,255,255,.62) !important;
+    color: #5b4aa0 !important;
+    border-color: rgba(91,74,160,.13) !important;
+}
+
+.mc, .ic, .trend-card, .cslide, .clc, .strategy, .export-card, .ph,
+[data-testid="stDataFrame"], [data-testid="stPlotlyChart"] {
+    background: rgba(255, 253, 249, 0.92) !important;
+    border-color: rgba(44,31,59,0.11) !important;
+    box-shadow: 0 16px 38px rgba(44,31,59,.08), 0 0 0 1px rgba(44,31,59,.035) !important;
+}
+
+.mc {
+    border-radius: 20px !important;
+}
+
+.mc::before {
+    height: 2px !important;
+    background: linear-gradient(90deg, #5b4aa0, #b15b9c) !important;
+}
+
+.mc-value, .hero-stat-val, .trend-val, .clc-name, .strategy-title, .ph h2 {
+    color: #15111d !important;
+}
+
+.mc-label, .trend-label {
+    color: #73687e !important;
+}
+
+.mc-sub, .ic-text, .strategy-body, .clc-sector, .trend-sub, .ph p {
+    color: #625a6f !important;
+}
+
+[data-testid="stPlotlyChart"] .gtitle {
+    display: none !important;
+}
+[data-testid="stPlotlyChart"] text {
+    fill: #41384f !important;
+}
+[data-testid="stPlotlyChart"] .legend text {
+    fill: #3a3346 !important;
+}
+[data-testid="stPlotlyChart"] .xtick text,
+[data-testid="stPlotlyChart"] .ytick text {
+    fill: #746b7f !important;
+}
+
+.stMultiSelect [data-baseweb="tag"] {
+    background: #f1edf7 !important;
+    color: #352d46 !important;
+    border: 1px solid rgba(91,74,160,.16) !important;
+}
+.stMultiSelect [data-baseweb="tag"] span {
+    color: #352d46 !important;
+}
+
+.stSlider [data-baseweb="slider"] > div > div > div {
+    background: rgba(91,74,160,.20) !important;
+}
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: #5b4aa0 !important;
+    box-shadow: 0 4px 12px rgba(91,74,160,.20) !important;
+}
+
+.revealable {
+    opacity: 0;
+    transform: translateY(22px) scale(.985);
+    transition: opacity .55s ease, transform .55s ease;
+}
+.revealable.reveal-in {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+}
+
+.cslide-val, .mc-value {
+    color: #5b4aa0 !important;
+}
+
+@media (max-width: 980px) {
+    .nav-wrap {
+        padding: 76px 14px 14px !important;
+        border-radius: 24px !important;
+    }
+    .nav-wrap::after { top: 14px; right: 14px; }
+    .nav-wrap::before { top: 18px; left: 20px; }
+    .nav-wrap [data-testid="stRadio"] div[role="radiogroup"] {
+        flex-wrap: wrap !important;
+    }
+    .hero-title { font-size: clamp(2.2rem, 12vw, 3.8rem) !important; }
+    .hero::after { display: none; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   V9 — Topbar real com popover de ações + correção visual dos gráficos
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Esconde a nav-wrap antiga, se sobrar CSS anterior */
+.nav-wrap { display: none !important; }
+
+.mirai-topbar {
+    position: sticky;
+    top: 14px;
+    z-index: 1000;
+    max-width: 1180px;
+    margin: 14px auto 24px;
+    padding: 13px 16px 13px 24px;
+    min-height: 70px;
+    border-radius: 25px;
+    background: rgba(255, 248, 238, 0.88);
+    border: 1px solid rgba(43,31,47,0.10);
+    box-shadow: 0 18px 42px rgba(44, 31, 59, 0.13);
+    backdrop-filter: blur(20px) saturate(155%);
+    -webkit-backdrop-filter: blur(20px) saturate(155%);
+}
+
+.mirai-brand {
+    color: #111018;
+    font-family: 'Inter Tight','Inter',sans-serif !important;
+    font-size: 1.04rem;
+    line-height: .82;
+    font-weight: 950;
+    letter-spacing: -.06em;
+}
+
+.mirai-brand span {
+    color: #111018;
+}
+
+.mirai-current {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    color: #4f465d;
+    font-size: .80rem;
+    font-weight: 760;
+    white-space: nowrap;
+}
+
+.mirai-current span {
+    color: #7a7085;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .10em;
+    font-weight: 850;
+}
+
+.mirai-current strong {
+    color: #15111d;
+    font-weight: 900;
+    letter-spacing: -.02em;
+}
+
+/* Botão do popover AÇÕES */
+.mirai-topbar [data-testid="stPopover"] button,
+.mirai-topbar button[kind="secondary"],
+.mirai-topbar .stButton > button {
+    background: #111018 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    min-height: 48px !important;
+    padding: 0 18px !important;
+    font-size: .82rem !important;
+    font-weight: 900 !important;
+    box-shadow: 0 12px 26px rgba(17,16,24,.16) !important;
+}
+
+.mirai-topbar [data-testid="stPopover"] button:hover,
+.mirai-topbar button[kind="secondary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 16px 34px rgba(17,16,24,.22) !important;
+}
+
+/* Conteúdo do popover */
+.actions-popover-title {
+    color: #15111d;
+    font-size: .95rem;
+    font-weight: 950;
+    letter-spacing: -.03em;
+    margin: 2px 0 10px;
+}
+
+.actions-popover-group {
+    color: #6f5bb7;
+    font-size: .68rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    margin: 14px 0 6px;
+}
+
+.actions-popover-note {
+    color: #746b7f;
+    font-size: .72rem;
+    line-height: 1.45;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(44,31,59,.08);
+}
+
+/* Botões dentro do popover: claros e elegantes */
+[data-testid="stPopoverBody"] .stButton > button {
+    background: #fffdf9 !important;
+    color: #251d35 !important;
+    border: 1px solid rgba(44,31,59,.10) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 5px 16px rgba(44,31,59,.06) !important;
+    justify-content: flex-start !important;
+    min-height: 39px !important;
+    font-size: .80rem !important;
+    font-weight: 820 !important;
+}
+
+[data-testid="stPopoverBody"] .stButton > button:hover {
+    background: #f4eff8 !important;
+    color: #5b4aa0 !important;
+    border-color: rgba(91,74,160,.20) !important;
+}
+
+/* Gráficos com labels mais legíveis */
+[data-testid="stPlotlyChart"] text {
+    fill: #41384f !important;
+}
+[data-testid="stPlotlyChart"] .legend text {
+    fill: #332b40 !important;
+}
+[data-testid="stPlotlyChart"] .gtitle {
+    display: none !important;
+}
+
+/* Evita roxo agressivo nos cards de M */
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: #5b4aa0 !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   V10 — topbar real e popover claro/sofisticado
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* mata qualquer wrapper antigo que tenha sobrado de versões anteriores */
+.mirai-topbar,
+.nav-wrap {
+    display: none !important;
+}
+
+/* keyed container real do Streamlit */
+.st-key-mirai_topbar {
+    position: sticky !important;
+    top: 14px !important;
+    z-index: 1000 !important;
+    max-width: 1180px !important;
+    margin: 14px auto 24px !important;
+    padding: 14px 18px 14px 26px !important;
+    min-height: 72px !important;
+    border-radius: 26px !important;
+    background: rgba(255, 248, 238, 0.90) !important;
+    border: 1px solid rgba(43,31,47,0.10) !important;
+    box-shadow: 0 18px 42px rgba(44, 31, 59, 0.13) !important;
+    backdrop-filter: blur(20px) saturate(155%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(155%) !important;
+}
+
+.st-key-mirai_topbar [data-testid="stHorizontalBlock"] {
+    align-items: center !important;
+}
+
+.mirai-brand {
+    color: #111018;
+    font-family: 'Inter Tight','Inter',sans-serif !important;
+    font-size: 1.04rem;
+    line-height: .82;
+    font-weight: 950;
+    letter-spacing: -.06em;
+}
+
+.mirai-brand span {
+    color: #111018;
+}
+
+.mirai-current {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    color: #4f465d;
+    font-size: .80rem;
+    font-weight: 760;
+    white-space: nowrap;
+}
+
+.mirai-current span {
+    color: #7a7085;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .10em;
+    font-weight: 850;
+}
+
+.mirai-current strong {
+    color: #15111d;
+    font-weight: 900;
+    letter-spacing: -.02em;
+}
+
+/* botão AÇÕES */
+.st-key-mirai_topbar [data-testid="stPopover"] button,
+.st-key-mirai_topbar button[kind="secondary"] {
+    background: #111018 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    min-height: 48px !important;
+    padding: 0 18px !important;
+    font-size: .82rem !important;
+    font-weight: 900 !important;
+    box-shadow: 0 12px 26px rgba(17,16,24,.16) !important;
+}
+
+.st-key-mirai_topbar [data-testid="stPopover"] button:hover,
+.st-key-mirai_topbar button[kind="secondary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 16px 34px rgba(17,16,24,.22) !important;
+}
+
+.st-key-mirai_topbar [data-testid="stPopover"] button::after {
+    content: "→";
+    margin-left: 7px;
+}
+
+.st-key-mirai_topbar [data-testid="stPopover"] button svg,
+.st-key-mirai_topbar [data-testid="stPopover"] button [data-testid="stIconMaterial"],
+.st-key-mirai_topbar [data-testid="stPopover"] button .material-symbols-rounded {
+    display: none !important;
+}
+
+/* popover claro */
+div[data-baseweb="popover"] > div {
+    background: transparent !important;
+}
+
+[data-testid="stPopoverBody"] {
+    background: rgba(255, 248, 238, .98) !important;
+    color: #15111d !important;
+    border: 1px solid rgba(43,31,47,0.11) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 28px 64px rgba(44,31,59,.22) !important;
+    padding: 18px !important;
+}
+
+[data-testid="stPopoverBody"] * {
+    color: inherit;
+}
+
+.actions-popover-title {
+    color: #15111d;
+    font-size: .98rem;
+    font-weight: 950;
+    letter-spacing: -.03em;
+    margin: 2px 0 10px;
+}
+
+.actions-popover-group {
+    color: #5b4aa0;
+    font-size: .68rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    margin: 15px 0 7px;
+}
+
+.actions-popover-note {
+    color: #746b7f;
+    font-size: .72rem;
+    line-height: 1.45;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(44,31,59,.08);
+}
+
+[data-testid="stPopoverBody"] .stButton > button {
+    background: #fffdf9 !important;
+    color: #251d35 !important;
+    border: 1px solid rgba(44,31,59,.10) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 5px 16px rgba(44,31,59,.06) !important;
+    justify-content: flex-start !important;
+    min-height: 39px !important;
+    font-size: .80rem !important;
+    font-weight: 820 !important;
+}
+
+[data-testid="stPopoverBody"] .stButton > button:hover {
+    background: #f4eff8 !important;
+    color: #5b4aa0 !important;
+    border-color: rgba(91,74,160,.20) !important;
+}
+
+/* gráficos */
+[data-testid="stPlotlyChart"] .gtitle {
+    display: none !important;
+}
+[data-testid="stPlotlyChart"] text {
+    fill: #41384f !important;
+}
+[data-testid="stPlotlyChart"] .legend text {
+    fill: #332b40 !important;
+}
+
+/* mobile */
+@media (max-width: 980px) {
+    .st-key-mirai_topbar {
+        border-radius: 24px !important;
+        padding: 16px !important;
+    }
+    .mirai-current {
+        justify-content: flex-start;
+        white-space: normal;
+    }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   V11 — topbar viva com tagline digitada e sem hero gigante
+   ══════════════════════════════════════════════════════════════════════════════ */
+.hero {
+    display: none !important;
+}
+
+.st-key-mirai_topbar {
+    min-height: 82px !important;
+    padding: 16px 20px 16px 24px !important;
+}
+
+.mirai-brand-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.mirai-brand {
+    font-size: 1.08rem !important;
+    line-height: .80 !important;
+}
+
+.mirai-tagline {
+    color: #655b73;
+    font-size: .84rem;
+    font-weight: 650;
+    letter-spacing: -.01em;
+    min-height: 20px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+#mirai-typing {
+    color: #655b73;
+}
+
+.typing-cursor {
+    display: inline-block;
+    color: #5b4aa0;
+    font-weight: 900;
+    animation: blinkCursor 1s step-end infinite;
+}
+
+@keyframes blinkCursor {
+    50% { opacity: 0; }
+}
+
+.mirai-current strong {
+    font-size: 1rem;
+}
+
+.st-key-mirai_topbar [data-testid="stPopover"] button,
+.st-key-mirai_topbar button[kind="secondary"] {
+    min-width: 132px !important;
+}
+
+@media (max-width: 980px) {
+    .mirai-tagline {
+        font-size: .76rem;
+    }
+    .st-key-mirai_topbar {
+        min-height: 96px !important;
+    }
+}
+
+</style>
+"""
+
+# ══════════════════════════════════════════════════════════════════════════════
+# PARALLAX — zonas alternas: banda de pontos / banda vazia (ratio 1:2)
+# ══════════════════════════════════════════════════════════════════════════════
+PARALLAX_JS = ""
+
+
+UX_JS = """
+<script>
+(function(){
+  function boot(){
+    var doc = window.parent.document;
+    if(doc.__miraiUXV8) return;
+    doc.__miraiUXV8 = true;
+
+    function markRevealables(){
+      var selectors = [
+        '.stPlotlyChart',
+        '[data-testid="stPlotlyChart"]',
+        '[data-testid="stDataFrame"]',
+        '.mc', '.ic', '.trend-card', '.cslide', '.clc', '.strategy', '.ph', '.sec-head'
+      ];
+      doc.querySelectorAll(selectors.join(',')).forEach(function(el){
+        if(!el.classList.contains('revealable')) el.classList.add('revealable');
+      });
+    }
+
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          e.target.classList.add('reveal-in');
+          obs.unobserve(e.target);
+        }
+      });
+    }, {threshold: 0.08, rootMargin: '0px 0px -6% 0px'});
+
+    function observe(){
+      markRevealables();
+      doc.querySelectorAll('.revealable:not(.reveal-in)').forEach(function(el){ obs.observe(el); });
+    }
+
+    observe();
+    setInterval(observe, 1200);
+  }
+  setTimeout(boot, 120);
+})();
+</script>
+"""
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+
+TYPE_JS = """
+<script>
+(function(){
+  function bootTyping(){
+    var doc = window.parent.document;
+    var el = doc.getElementById("mirai-typing");
+    if(!el) return;
+    if(doc.__miraiTypingBooted) return;
+    doc.__miraiTypingBooted = true;
+
+    var text = "Uma visão 360 da carteira";
+    var typing = true;
+    var i = 0;
+
+    function tick(){
+      if(!el){ doc.__miraiTypingBooted = false; return; }
+
+      if(typing){
+        i = Math.min(i + 1, text.length);
+        el.textContent = text.slice(0, i);
+        if(i >= text.length){
+          typing = false;
+          setTimeout(tick, 1500);
+          return;
+        }
+      } else {
+        i = Math.max(i - 1, 0);
+        el.textContent = text.slice(0, i);
+        if(i <= 0){
+          typing = true;
+          setTimeout(tick, 250);
+          return;
+        }
+      }
+      setTimeout(tick, typing ? 68 : 38);
+    }
+
+    tick();
+  }
+
+  setTimeout(bootTyping, 250);
+  setInterval(function(){
+    var doc = window.parent.document;
+    if(!doc.__miraiTypingBooted){
+      bootTyping();
+    }
+  }, 2500);
+})();
+</script>
+"""
+
+
+# DB
+# ══════════════════════════════════════════════════════════════════════════════
+@st.cache_resource
+def get_conn():
+    try:
+        token = st.secrets["motherduck"]["token"]
+        return duckdb.connect(f"md:mirai_db?motherduck_token={token}")
+    except Exception:
+        return duckdb.connect("md:mirai_db")
+
+@st.cache_data(ttl=300)
+def query(sql: str) -> pd.DataFrame:
+    return get_conn().execute(sql).df()
+
+# ══════════════════════════════════════════════════════════════════════════════
+# HELPERS
+# ══════════════════════════════════════════════════════════════════════════════
+def fmt_num(n, default="—"):
+    try:
+        v = int(n)
+        return f"{v:,}".replace(",",".")
+    except Exception:
+        return default
+
+def fmt_brl(n):
+    try:
+        return f"R$ {float(n):,.2f}".replace(",","X").replace(".",",").replace("X",".")
+    except Exception:
+        return "—"
+
+def safe_int(n, default=0):
+    try:
+        if n is None: return default
+        f = float(n)
+        import math
+        if math.isnan(f): return default
+        return int(f)
+    except Exception:
+        return default
+
+def delta_html(val, prev, suffix=""):
+    if prev is None or prev == 0:
+        return '<div class="mc-delta neu">— sem referencia anterior</div>'
+    diff = val - prev
+    pct  = diff / prev * 100
+    sign = "+" if diff >= 0 else ""
+    if abs(pct) < 0.5:
+        arrow_svg = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>'
+        return f'<div class="mc-delta neu">{arrow_svg} estável {sign}{pct:.1f}% {suffix}</div>'
+    elif diff > 0:
+        arrow_svg = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 10V2M2 6l4-4 4 4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        return f'<div class="mc-delta up">{arrow_svg} +{fmt_num(diff)} ({sign}{pct:.1f}%) {suffix}</div>'
+    else:
+        arrow_svg = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 2v8M2 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        return f'<div class="mc-delta down">{arrow_svg} {fmt_num(diff)} ({sign}{pct:.1f}%) {suffix}</div>'
+
+def health_bar(pct, color="#7663c6"):
+    return f'<div class="mc-bar"><div class="mc-bar-bg"><div class="hb-fill" style="width:{min(100,max(0,pct))}%;background:{color};"></div></div></div>'
+
+def metric_card(label, value, delta_html_str="", sub="", bar_pct=None, bar_color="#7663c6", color_cls="cp"):
+    bar_html = health_bar(bar_pct, bar_color) if bar_pct is not None else ""
+    sub_html  = f'<div class="mc-sub">{sub}</div>' if sub else ""
+    return (
+        f'<div class="mc {color_cls}">'
+        f'<div class="mc-label">{label}</div>'
+        f'<div class="mc-value">{value}</div>'
+        f'{delta_html_str}{sub_html}{bar_html}'
+        f'</div>'
+    )
+
+def insight_card(sym, title, text, color=None):
+    c = color or "var(--purple3)"
+    return (
+        f'<div class="ic">'
+        f'<div class="ic-sym">{sym}</div>'
+        f'<div>'
+        f'<div class="ic-title" style="color:{c};">{title}</div>'
+        f'<div class="ic-text">{text}</div>'
+        f'</div></div>'
+    )
+
+def chip_html(prio):
+    MAP = {"P0":"ch-p0","P1":"ch-p1","P2":"ch-p2","P3":"ch-p3","P4":"ch-p4","P5":"ch-p3","P6":"ch-p4"}
+    cls = MAP.get(prio[:2], "ch-p4")
+    return f'<span class="chip {cls}">{prio}</span>'
+
+_URGENCY = {
+    "urgente":      ("rgba(239,68,68,.12)",   "#f87171", "URGENTE"),
+    "atencao":      ("rgba(245,158,11,.12)",  "#fbbf24", "ATENCAO"),
+    "oportunidade": ("rgba(124,58,237,.12)",  "#a896db", "OPORTUNIDADE"),
+    "positivo":     ("rgba(16,185,129,.12)",  "#34d399", "POSITIVO"),
+    "neutro":       ("rgba(71,63,104,.18)",   "#8b7eaa", "INFO"),
+}
+
+def carousel_html(items, cid):
+    slides = []
+    for it in items:
+        bg, fg, lbl = _URGENCY.get(it.get("urgency","neutro"), _URGENCY["neutro"])
+        slides.append(
+            f'<div class="cslide">'
+            f'<span class="cslide-urgency" style="background:{bg};color:{fg};">{lbl}</span>'
+            f'<div class="cslide-title">{it["title"]}</div>'
+            f'<div class="cslide-stats">'
+            f'<div><div class="cslide-val">{it["v_a"]}</div><div class="cslide-lbl">{it["l_a"]}</div></div>'
+            f'<div><div class="cslide-val">{it["v_b"]}</div><div class="cslide-lbl">{it["l_b"]}</div></div>'
+            f'</div>'
+            f'<div class="cslide-desc">{it["desc"]}</div>'
+            f'</div>'
+        )
+    html = (
+        f'<div class="carousel-shell">'
+        f'<div class="carousel-track" id="{cid}">'
+        + "".join(slides) +
+        f'</div></div>'
+    )
+    st.markdown(html, unsafe_allow_html=True)
+    if items:
+        btns = st.columns(len(items))
+        for i, it in enumerate(items):
+            with btns[i]:
+                if st.button(it["title"][:22], key=f"{cid}_b{i}", width="stretch"):
+                    st.session_state["mb_tipo"] = it.get("mb_tipo","Todos")
+                    st.session_state["mailing_df"] = None
+                    st.session_state["_nav_pending"] = "Mailing Builder"
+                    st.rerun()
+
+def sec_head(title, sub="", badge=""):
+    b = f'<span class="sec-badge">{badge}</span>' if badge else ""
+    s = f'<span class="sec-sub">{sub}</span>' if sub else ""
+    st.markdown(
+        f'<div class="sec-head"><span class="sec-title">{title}</span>{s}{b}</div>',
+        unsafe_allow_html=True
+    )
+
+def page_header(title, sub=""):
+    s = f"<p>{sub}</p>" if sub else ""
+    st.markdown(f'<div class="ph"><h2>{title}</h2>{s}</div>', unsafe_allow_html=True)
+
+def strategy_card(kicker, title, body):
+    st.markdown(
+        f'<div class="strategy">'
+        f'<div class="strategy-kicker">{kicker}</div>'
+        f'<div class="strategy-title">{title}</div>'
+        f'<div class="strategy-body">{body}</div>'
+        f'</div>', unsafe_allow_html=True
+    )
+
+def plotly_dark():
+    return dict(
+        paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="#fffdf9",
+        font=dict(color="#41384f", family="Inter", size=11),
+        xaxis=dict(
+            gridcolor="rgba(44,31,59,.08)",
+            zerolinecolor="rgba(44,31,59,.08)",
+            color="#625a6f",
+            title_font=dict(color="#625a6f", size=11),
+            tickfont=dict(color="#625a6f", size=11),
+        ),
+        yaxis=dict(
+            gridcolor="rgba(44,31,59,.06)",
+            zerolinecolor="rgba(44,31,59,.06)",
+            color="#625a6f",
+            title_font=dict(color="#625a6f", size=11),
+            tickfont=dict(color="#625a6f", size=11),
+        ),
+        margin=dict(l=8, r=8, t=18, b=8),
+        legend=dict(
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#3a3346", size=12),
+            title_font=dict(color="#3a3346", size=12),
+        ),
+        hoverlabel=dict(
+            bgcolor="#fffdf9",
+            bordercolor="rgba(44,31,59,.16)",
+            font=dict(color="#15111d"),
+        ),
+    )
+
+PURPLE_SEQ = ["#7663c6","#8974d6","#a896db","#9f54c1","#e879f9","#c4b5fd","#38bdf8","#10b981"]
+
+def style_fig(fig, h=380, show_legend=False):
+    # Sem title/title_text duplicado: evita o erro "multiple values for keyword argument title".
+    fig.update_layout(**plotly_dark())
+    fig.update_layout(height=h, showlegend=show_legend)
+    fig.update_layout(title=None)
+    fig.update_layout(title_text="")
+    fig.update_traces(textfont=dict(color="#312944", size=11), selector=dict(type="bar"))
+    fig.update_traces(textfont=dict(color="#312944", size=11), selector=dict(type="pie"))
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
+    return fig
+
+def request_page(name):
+    st.session_state["_nav_pending"] = name
+
+def render_nav(options):
+    pending_key = "_nav_pending"
+    widget_key  = "nav_widget"
+
+    pending = st.session_state.get(pending_key)
+    if pending in options:
+        st.session_state[widget_key] = pending
+        st.session_state[pending_key] = None
+    if widget_key not in st.session_state:
+        st.session_state[widget_key] = options[0]
+
+    groups = {
+        "Visão geral": ["Visao Geral — Linhas", "Visao Geral — CNPJs"],
+        "QSC e comparativos": ["Saude QSC", "Comparativos", "Jornada por M"],
+        "Carteira": ["Por Vertical", "Busca por Cliente"],
+        "Ação comercial": ["Alertas da Semana", "Oportunidades", "Mailing Builder"],
+    }
+
+    with st.container(key="mirai_topbar"):
+        left, mid, right = st.columns([1.55, 2.5, 1.0], vertical_alignment="center")
+
+        with left:
+            st.markdown(
+                '''<div class="mirai-brand-wrap">
+                    <div class="mirai-brand">mirai<br><span>hub</span></div>
+                    <div class="mirai-tagline">
+                        <span id="mirai-typing">Uma visão 360 da carteira</span><span class="typing-cursor">|</span>
+                    </div>
+                </div>''',
+                unsafe_allow_html=True,
+            )
+
+        with mid:
+            current = st.session_state.get(widget_key, options[0])
+            st.markdown(
+                f'<div class="mirai-current"><span>Carteira ativa</span><strong>{current}</strong></div>',
+                unsafe_allow_html=True,
+            )
+
+        with right:
+            with st.popover("AÇÕES"):
+                st.markdown('<div class="actions-popover-title">Navegação do hub</div>', unsafe_allow_html=True)
+
+                for group, items in groups.items():
+                    st.markdown(f'<div class="actions-popover-group">{group}</div>', unsafe_allow_html=True)
+                    for item in items:
+                        active = item == st.session_state.get(widget_key)
+                        label = ("✓ " if active else "") + item
+                        if st.button(label, key=f"nav_action_{item}", width="stretch"):
+                            st.session_state[widget_key] = item
+                            st.rerun()
+
+                st.markdown(
+                    '<div class="actions-popover-note">Alternar entre visão executiva, QSC, alertas, oportunidades e mailing.</div>',
+                    unsafe_allow_html=True,
+                )
+
+    return st.session_state[widget_key]
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BOOTSTRAP
+# ══════════════════════════════════════════════════════════════════════════════
+st.markdown(CSS, unsafe_allow_html=True)
+components.html(PARALLAX_JS, height=0, width=0)
+components.html(UX_JS, height=0, width=0)
+components.html(TYPE_JS, height=0, width=0)
+
+NAV = [
+    "Visao Geral — Linhas",
+    "Visao Geral — CNPJs",
+    "Saude QSC",
+    "Comparativos",
+    "Jornada por M",
+    "Por Vertical",
+    "Alertas da Semana",
+    "Oportunidades",
+    "Busca por Cliente",
+    "Mailing Builder",
+]
+
+if "mb_tipo"    not in st.session_state: st.session_state["mb_tipo"]    = "Todos"
+if "mailing_df" not in st.session_state: st.session_state["mailing_df"] = None
+if "_nav_pending" not in st.session_state: st.session_state["_nav_pending"] = None
+
+page = render_nav(NAV)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VISAO GERAL — LINHAS
+# ══════════════════════════════════════════════════════════════════════════════
+def generate_insights_carteira(df_kpi_linhas, df_saude):
+    out = []
+    try:
+        m16 = safe_int(df_kpi_linhas.get("m16", [0])[0] if hasattr(df_kpi_linhas,"get") else 0)
+        if m16 > 0:
+            out.append({"sym":"▲","title":f"{fmt_num(m16)} linhas em M16 urgente","text":"Blindagem obrigatória esta semana — viram M17 no próximo ciclo e saem do parque fidelizado QSC.","color":"#f87171"})
+    except Exception: pass
+    try:
+        db_pct = safe_int(df_saude[df_saude["kpi"]=="Debito Automatico"]["pct_aderencia"].values[0] if not df_saude.empty else 0)
+        if db_pct < 20:
+            out.append({"sym":"!","title":f"Débito automático em {db_pct}%","text":"Menor de 20%: cada ativação em cliente sem CAR e semáforo verde é pontuação QSC imediata.","color":"#fbbf24"})
+    except Exception: pass
+    try:
+        inv = safe_int(df_saude[df_saude["kpi"]=="Invasao de Carteira"]["aderentes"].values[0] if not df_saude.empty else 0)
+        if inv > 0:
+            out.append({"sym":"●","title":f"{fmt_num(inv)} clientes invadidos","text":"Outro canal está atendendo CNPJs da sua carteira. Contestar antes de qualquer nova venda.","color":"#f87171"})
+    except Exception: pass
+    if len(out) < 3:
+        out.append({"sym":"◆","title":"Base QSC atualizada","text":"Banco de dados com dados de Carteira, Móvel e Fixa integrados. Motor de priorização ativo.","color":"#a896db"})
+    return out[:5]
+
+if page == "Visao Geral — Linhas":
+    # intro compacto: o branding agora fica na topbar
+    st.markdown('<div style="height: 6px;"></div>', unsafe_allow_html=True)
+
+    df_snap = query("""
+        SELECT COUNT(*) AS total, COUNT(CASE WHEN flg_ativa='SIM' THEN 1 END) AS ativas,
+               COUNT(CASE WHEN flg_m16_urgente='SIM' THEN 1 END) AS m16,
+               COUNT(CASE WHEN flg_safra_tfp='SIM' THEN 1 END) AS tfp,
+               COUNT(CASE WHEN flg_elegivel_comercial='SIM' THEN 1 END) AS elegiveis,
+               COUNT(CASE WHEN flg_oportunidade_fixa='SIM' THEN 1 END) AS oport_fixa,
+               ROUND(AVG(CAST(m AS DOUBLE)),1) AS m_medio,
+               ROUND(SUM(fat_medio),2) AS fat_total,
+               ROUND(AVG(CASE WHEN flg_ativa='SIM' THEN fat_medio END),2) AS arpu_medio
+        FROM main.fato_linha_movel
+        WHERE dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
+    """)
+    rs = df_snap.iloc[0]
+
+    df_snap2 = query("""
+        SELECT COUNT(*) AS total, COUNT(CASE WHEN flg_ativa='SIM' THEN 1 END) AS ativas,
+               COUNT(CASE WHEN flg_m16_urgente='SIM' THEN 1 END) AS m16,
+               ROUND(SUM(fat_medio),2) AS fat_total,
+               ROUND(AVG(CASE WHEN flg_ativa='SIM' THEN fat_medio END),2) AS arpu_medio
+        FROM main.fato_linha_movel
+        WHERE dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel
+            WHERE dt_snapshot < (SELECT MAX(dt_snapshot) FROM main.fato_linha_movel))
+    """) if query("SELECT COUNT(DISTINCT dt_snapshot) AS n FROM main.fato_linha_movel").iloc[0]["n"] > 1 else None
+
+    r2 = df_snap2.iloc[0] if df_snap2 is not None and not df_snap2.empty else None
+
+    sec_head("Parque movel", "Ultimo snapshot — visao por linhas", badge="LINHAS")
+
+    c1,c2,c3,c4 = st.columns(4)
+    with c1:
+        dh = delta_html(safe_int(rs.total), safe_int(r2.total) if r2 is not None else None, "vs anterior")
+        st.markdown(metric_card("Total de linhas", fmt_num(rs.total), dh, color_cls="cp"), unsafe_allow_html=True)
+    with c2:
+        pct_a = 100*safe_int(rs.ativas)//max(safe_int(rs.total),1)
+        dh2 = delta_html(safe_int(rs.ativas), safe_int(r2.ativas) if r2 is not None else None, "vs anterior")
+        st.markdown(metric_card("Linhas ativas", fmt_num(rs.ativas), dh2, f"{pct_a}% do parque", bar_pct=pct_a, color_cls="cg"), unsafe_allow_html=True)
+    with c3:
+        dh3 = delta_html(safe_int(rs.m16), safe_int(r2.m16) if r2 is not None else None, "vs anterior")
+        st.markdown(metric_card("M16 urgente", fmt_num(rs.m16), dh3, "blindar esta semana", color_cls="cr"), unsafe_allow_html=True)
+    with c4:
+        dh4 = delta_html(float(rs.arpu_medio or 0), float(r2.arpu_medio or 0) if r2 is not None else None, "vs anterior")
+        st.markdown(metric_card("ARPU mensal", fmt_brl(rs.arpu_medio), dh4, "ticket medio por linha ativa", color_cls="ca"), unsafe_allow_html=True)
+
+    c5,c6,c7,c8 = st.columns(4)
+    with c5: st.markdown(metric_card("M medio", rs.m_medio, sub="maturidade do parque"), unsafe_allow_html=True)
+    with c6: st.markdown(metric_card("Safra TFP (M5)", fmt_num(rs.tfp), sub="cobrar 3a fatura"), unsafe_allow_html=True)
+    with c7: st.markdown(metric_card("Elegiveis blindagem", fmt_num(rs.elegiveis), sub="acao comercial"), unsafe_allow_html=True)
+    with c8: st.markdown(metric_card("Oport. convergencia", fmt_num(rs.oport_fixa), sub="movel sem fixa", color_cls="cs"), unsafe_allow_html=True)
+
+    # insights automáticos
+    df_saude = query("SELECT * FROM main.vw_saude_qsc_executiva") if True else pd.DataFrame()
+    insights = generate_insights_carteira(rs, df_saude)
+
+    col_i, col_g = st.columns([1, 2], gap="large")
+    with col_i:
+        sec_head("Alertas automaticos", "detectados no parque atual")
+        for ins in insights:
+            st.markdown(insight_card(ins["sym"], ins["title"], ins["text"], ins["color"]), unsafe_allow_html=True)
+
+    with col_g:
+        sec_head("Linhas por vertical")
+        df_v = query("""
+            SELECT COALESCE(c.vertical,'Nao informado') AS vertical, COUNT(*) AS linhas
+            FROM main.fato_linha_movel l JOIN main.dim_cliente_hub c ON l.cnpj=c.cnpj
+            WHERE l.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l.flg_ativa='SIM'
+            GROUP BY 1 ORDER BY linhas DESC LIMIT 12
+        """)
+        fig = px.bar(df_v.sort_values("linhas"), x="linhas", y="vertical", orientation="h",
+                     text="linhas", color_discrete_sequence=PURPLE_SEQ,
+                     labels={"linhas":"Linhas","vertical":""})
+        fig.update_traces(marker_color="#5b4aa0", textfont_color="#312944", textposition="outside")
+        st.plotly_chart(style_fig(fig, h=420), width="stretch")
+
+    # carrossel mailings prioritários
+    df_al = query("SELECT tipo_alerta, COUNT(*) AS q, COUNT(DISTINCT cnpj) AS c FROM main.vw_alertas_semana GROUP BY 1")
+    df_mo = query("""
+        SELECT prioridade_acao, COUNT(*) AS q, SUM(COALESCE(qt_linhas_ativas,0)) AS l
+        FROM main.vw_motor_priorizacao_qsc
+        WHERE prioridade_acao NOT LIKE 'P9%' GROUP BY 1 ORDER BY 2 DESC LIMIT 3
+    """)
+
+    def ga(tipo):
+        r = df_al[df_al["tipo_alerta"]==tipo]
+        return (safe_int(r.iloc[0]["q"]), safe_int(r.iloc[0]["c"])) if not r.empty else (0,0)
+
+    m16l, m16c = ga("M16 URGENTE"); tfpl, tfpc = ga("SAFRA TFP M5")
+
+    items_mail = [
+        {"title":"M16 urgente","v_a":fmt_num(m16l),"l_a":"linhas","v_b":fmt_num(m16c),"l_b":"clientes",
+         "desc":"Blindagem obrigatoria — M17 sai do fidelizado QSC no proximo ciclo.","urgency":"urgente","mb_tipo":"M16 URGENTE"},
+        {"title":"Safra TFP M5","v_a":fmt_num(tfpl),"l_a":"linhas","v_b":fmt_num(tfpc),"l_b":"clientes",
+         "desc":"M=5 e o gatilho da 3a fatura — janela curta para cobrar TFP.","urgency":"atencao","mb_tipo":"SAFRA TFP M5"},
+    ]
+    for _, row in df_mo.iterrows():
+        p = row["prioridade_acao"]
+        items_mail.append({"title":p,"v_a":fmt_num(row["q"]),"l_a":"clientes","v_b":fmt_num(row["l"]),"l_b":"linhas",
+                           "desc":p,"urgency":"oportunidade","mb_tipo":p})
+
+    sec_head("Mailings prioritarios", "clique para abrir o Mailing Builder filtrado")
+    carousel_html(items_mail[:6], "car_linhas_mail")
+
+    # grafico semaforo
+    col_s, col_f = st.columns(2, gap="large")
+    with col_s:
+        sec_head("Semaforo Serasa")
+        df_sem = query("""
+            SELECT semaforo, COUNT(*) AS q FROM main.fato_linha_movel
+            WHERE dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND flg_ativa='SIM'
+            GROUP BY 1 ORDER BY q DESC
+        """)
+        cmap = {"VERDE":"#10b981","AMARELO":"#f59e0b","VERMELHO":"#ef4444","PRETO":"#1f1235","CINZA":"#4d4368"}
+        fig2 = px.pie(df_sem, names="semaforo", values="q", color="semaforo",
+                      color_discrete_map=cmap, hole=0.6)
+        fig2.update_traces(textinfo="percent", textfont_color="#312944", textfont_size=11)
+        st.plotly_chart(style_fig(fig2, h=300), width="stretch")
+    with col_f:
+        sec_head("Faturamento por vertical")
+        df_fat = query("""
+            SELECT COALESCE(c.vertical,'Nao informado') AS v, ROUND(SUM(l.fat_medio),0) AS fat
+            FROM main.fato_linha_movel l JOIN main.dim_cliente_hub c ON l.cnpj=c.cnpj
+            WHERE l.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l.flg_ativa='SIM'
+            GROUP BY 1 ORDER BY fat DESC LIMIT 10
+        """)
+        fig3 = px.bar(df_fat.sort_values("fat"), x="fat", y="v", orientation="h",
+                      color="fat", color_continuous_scale=["#e8e0ef","#8d7fbc","#5b4aa0"],
+                      labels={"fat":"R$","v":""})
+        fig3.update_layout(coloraxis_showscale=False)
+        st.plotly_chart(style_fig(fig3, h=300), width="stretch")
+
+    strategy_card(
+        "LEITURA EXECUTIVA",
+        "Onde concentrar esforco esta semana",
+        "Cruzamento entre M16 urgente, TFP M5 e Debito Automatico aponta as tres maiores alavancas de QSC disponíveis agora. "
+        "Veja a pagina Saude QSC para o motor de priorizacao por cliente e a pagina Comparativos para evolução temporal."
+    )
+
+# ══════════════════════════════════════════════════════════════════════════════
+# VISAO GERAL — CNPJs
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Visao Geral — CNPJs":
+    page_header("Visao Geral — CNPJs", "Carteira por cliente (CNPJ) — riqueza da base, nao volume de linhas")
+
+    df_hub = query("""
+        SELECT COUNT(DISTINCT cnpj) AS total,
+               COUNT(DISTINCT CASE WHEN situacao_receita='2 - ATIVA' THEN cnpj END) AS ativos,
+               COUNT(DISTINCT CASE WHEN COALESCE(qt_movel,0)>0 THEN cnpj END) AS com_movel,
+               COUNT(DISTINCT CASE WHEN COALESCE(qt_banda_larga,0)>0 OR COALESCE(qt_linha_fixa,0)>0 THEN cnpj END) AS com_fixa,
+               COUNT(DISTINCT CASE WHEN COALESCE(qt_office_365,0)>0 THEN cnpj END) AS com_office,
+               COUNT(DISTINCT CASE WHEN COALESCE(qt_vivo_tech,0)>0 THEN cnpj END) AS com_vt,
+               COUNT(DISTINCT CASE WHEN flg_biometrado='1' THEN cnpj END) AS biometrados,
+               COUNT(DISTINCT CASE WHEN COALESCE(vl_car_movel,0)+COALESCE(vl_car_fixa,0)>0 THEN cnpj END) AS com_car
+        FROM main.dim_cliente_hub
+    """)
+    rh = df_hub.iloc[0]
+    total = safe_int(rh.total)
+
+    df_qsc = query("SELECT * FROM main.dim_qsc_cliente LIMIT 1") if True else pd.DataFrame()
+    db_cnt = safe_int(query("SELECT SUM(flg_tem_debito_auto) AS n FROM main.dim_qsc_cliente").iloc[0]["n"])
+    inv_cnt = safe_int(query("SELECT SUM(flg_invadido) AS n FROM main.dim_qsc_cliente").iloc[0]["n"])
+    car_cnt = safe_int(query("SELECT SUM(flg_car_cronico) AS n FROM main.dim_qsc_cliente").iloc[0]["n"])
+
+    c1,c2,c3,c4 = st.columns(4)
+    with c1: st.markdown(metric_card("CNPJs na carteira", fmt_num(total), color_cls="cp"), unsafe_allow_html=True)
+    with c2:
+        p = 100*safe_int(rh.ativos)//max(total,1)
+        st.markdown(metric_card("CNPJs ativos", fmt_num(rh.ativos), sub=f"{p}% do total", bar_pct=p, color_cls="cg"), unsafe_allow_html=True)
+    with c3:
+        p2 = 100*safe_int(rh.biometrados)//max(total,1)
+        st.markdown(metric_card("CNPJs biometrados", fmt_num(rh.biometrados), sub=f"{p2}% do total", bar_pct=p2, color_cls="cs"), unsafe_allow_html=True)
+    with c4:
+        p3 = 100*db_cnt//max(total,1)
+        st.markdown(metric_card("Com debito automatico", fmt_num(db_cnt), sub=f"{p3}% — maior oportunidade QSC", bar_pct=p3, color_cls="ca"), unsafe_allow_html=True)
+
+    c5,c6,c7,c8 = st.columns(4)
+    with c5: st.markdown(metric_card("Com movel", fmt_num(rh.com_movel), sub="clientes movel ativos"), unsafe_allow_html=True)
+    with c6: st.markdown(metric_card("Com fixa/BL", fmt_num(rh.com_fixa), sub="banda larga ou voz fixa"), unsafe_allow_html=True)
+    with c7: st.markdown(metric_card("CAR cronico", fmt_num(car_cnt), sub=">30 dias em aberto", color_cls="cr"), unsafe_allow_html=True)
+    with c8: st.markdown(metric_card("Invadidos", fmt_num(inv_cnt), sub="outro canal atendendo", color_cls="cr"), unsafe_allow_html=True)
+
+    # motor de priorização por CNPJ
+    df_motor = query("""
+        SELECT prioridade_acao, COUNT(*) AS clientes, ROUND(AVG(score_prioridade),1) AS score,
+               SUM(COALESCE(qt_linhas_ativas,0)) AS linhas
+        FROM main.vw_motor_priorizacao_qsc
+        WHERE prioridade_acao != 'P9 - SEM ACAO PRIORITARIA'
+        GROUP BY 1 ORDER BY score DESC
+    """)
+
+    col_m, col_r = st.columns([1.4, 1], gap="large")
+    with col_m:
+        sec_head("Motor de priorizacao — por CNPJ", "cenarios cruzados CAR + debito + biometria + M + invasao")
+        st.markdown('<div class="soft-note"><strong>Como ler o indice de prioridade:</strong> score de 0 a 100 calculado a partir da combinacao de risco, oportunidade comercial e urgencia operacional. Quanto maior o indice, maior a prioridade de acao.</div>', unsafe_allow_html=True)
+        CORES_P = {"P0":"#f87171","P1":"#e879f9","P2":"#fbbf24","P3":"#a896db","P4":"#34d399","P5":"#7663c6","P6":"#10b981"}
+        for _, row in df_motor.iterrows():
+            p = row["prioridade_acao"]
+            cor = CORES_P.get(p[:2],"#8b7eaa")
+            pct_bar = min(100, safe_int(row["score"]))
+            html = (
+                f'<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid {cor};'
+                f'border-radius:var(--radius);padding:14px 16px;margin-bottom:8px;">'
+                f'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;">'
+                f'<div style="flex:1;">'
+                f'<div style="font-size:.86rem;font-weight:800;color:var(--ink);">{p}</div>'
+                f'</div>'
+                f'<div style="display:flex;gap:18px;text-align:right;flex-shrink:0;">'
+                f'<div><div style="font-size:1.2rem;font-weight:900;color:{cor};">{fmt_num(row["clientes"])}</div>'
+                f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;">cnpjs</div></div>'
+                f'<div><div style="font-size:1.2rem;font-weight:900;color:var(--purple3);">{row["score"]}</div>'
+                f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;">indice</div></div>'
+                f'</div></div>'
+                f'<div class="mc-bar-bg" style="margin-top:8px;">'
+                f'<div class="hb-fill" style="width:{pct_bar}%;background:{cor};"></div></div>'
+                f'</div>'
+            )
+            st.markdown(html, unsafe_allow_html=True)
+            if st.button(f"Mailing {p[:10]}", key=f"btn_cnpj_{p[:5]}", width="stretch"):
+                st.session_state["mb_tipo"] = p
+                st.session_state["mailing_df"] = None
+                request_page("Mailing Builder")
+                st.rerun()
+
+    with col_r:
+        sec_head("CNPJs por vertical")
+        df_vert = query("""
+            SELECT COALESCE(vertical,'Nao informado') AS v, COUNT(DISTINCT cnpj) AS n
+            FROM main.dim_cliente_hub WHERE situacao_receita='2 - ATIVA'
+            GROUP BY 1 ORDER BY n DESC LIMIT 10
+        """)
+        fig = px.bar(df_vert.sort_values("n"), x="n", y="v", orientation="h",
+                     text="n", color_discrete_sequence=["#5b4aa0"], labels={"n":"CNPJs","v":""})
+        fig.update_traces(marker_color="#5b4aa0", textfont_color="#312944", textposition="outside")
+        st.plotly_chart(style_fig(fig, h=360), width="stretch")
+
+        sec_head("Mix de produtos — CNPJs ativos")
+        prods = {
+            "Movel": safe_int(rh.com_movel),
+            "Fixa/BL": safe_int(rh.com_fixa),
+            "Office 365": safe_int(rh.com_office),
+            "Vivo Tech": safe_int(rh.com_vt),
+        }
+        fig2 = px.pie(
+            values=list(prods.values()), names=list(prods.keys()),
+            hole=0.55, color_discrete_sequence=PURPLE_SEQ
+        )
+        fig2.update_traces(textinfo="percent+label", textfont_color="#312944", textfont_size=10)
+        st.plotly_chart(style_fig(fig2, h=260), width="stretch")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# SAUDE QSC (compacta, remete ao que já existe)
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Saude QSC":
+    page_header("Saude QSC", "Indicadores Quality Score Card — canal Vivo B2B Consultivo")
+
+    df_saude = query("SELECT * FROM main.vw_saude_qsc_executiva")
+    df_comp  = query("SELECT * FROM main.vw_comparativo_qsc_semanal")
+    glossario = query("SELECT chave, titulo, explicacao FROM main.dim_glossario_qsc")
+
+    cols = st.columns(3)
+    CORES_QSC = {"Debito Automatico":"cr","Biometria Parque":"cs","CAR Cronico (>30 dias)":"ca",
+                 "Invasao de Carteira":"cr","M16 Urgente (Movel)":"cr","Safra TFP Movel (M5)":"ca"}
+    for i, (_, r) in enumerate(df_saude.iterrows()):
+        cr = df_comp[df_comp["kpi"]==r["kpi"]]
+        var = safe_int(cr.iloc[0]["variacao_absoluta"]) if not cr.empty else None
+        prev = safe_int(r["aderentes"]) - (var or 0)
+        dh = delta_html(safe_int(r["aderentes"]), prev if var is not None else None, "vs semana anterior")
+        pct = r["pct_aderencia"]
+        pct_txt = f"{pct:.1f}% aderencia" if pct and not pd.isna(pct) else "acompanhamento direto"
+        cc = CORES_QSC.get(r["kpi"],"cp")
+        pct_bar = float(pct) if pct and not pd.isna(pct) else None
+        with cols[i % 3]:
+            st.markdown(metric_card(r["kpi"], fmt_num(r["oportunidade_disponivel"]),
+                                    dh, pct_txt, bar_pct=pct_bar, color_cls=cc), unsafe_allow_html=True)
+
+    sec_head("Motor de priorizacao", "P0 = maxima urgencia · P9 = sem acao prioritaria")
+    st.markdown('<div class="soft-note"><strong>Como ler o indice de prioridade:</strong> score de 0 a 100 calculado a partir da combinacao de risco, oportunidade comercial e urgencia operacional. Quanto maior o indice, maior a prioridade de acao.</div>', unsafe_allow_html=True)
+    df_motor = query("""
+        SELECT prioridade_acao, explicacao_acao, COUNT(*) AS clientes, ROUND(AVG(score_prioridade),1) AS score
+        FROM main.vw_motor_priorizacao_qsc WHERE prioridade_acao != 'P9 - SEM ACAO PRIORITARIA'
+        GROUP BY 1,2 ORDER BY score DESC
+    """)
+    CORES_P = {"P0":"#f87171","P1":"#e879f9","P2":"#fbbf24","P3":"#a896db","P4":"#34d399","P5":"#7663c6","P6":"#10b981"}
+    for _, row in df_motor.iterrows():
+        p = row["prioridade_acao"]; cor = CORES_P.get(p[:2],"#8b7eaa")
+        html = (
+            f'<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid {cor};'
+            f'border-radius:var(--radius);padding:14px 18px;margin-bottom:8px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'
+            f'<div style="flex:1;min-width:200px;">'
+            f'<div style="font-size:.88rem;font-weight:800;color:var(--ink);">{p}</div>'
+            f'<div style="font-size:.75rem;color:var(--muted);margin-top:3px;">{row["explicacao_acao"]}</div>'
+            f'</div>'
+            f'<div style="display:flex;gap:20px;text-align:right;">'
+            f'<div><div style="font-size:1.25rem;font-weight:900;color:{cor};">{fmt_num(row["clientes"])}</div>'
+            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">clientes</div></div>'
+            f'<div><div style="font-size:1.25rem;font-weight:900;color:var(--purple3);">{row["score"]}</div>'
+            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">indice</div></div>'
+            f'</div></div></div>'
+        )
+        st.markdown(html, unsafe_allow_html=True)
+        if st.button(f"Mailing — {p}", key=f"qsc_btn_{p[:8]}", width="stretch"):
+            st.session_state["mb_tipo"] = p; st.session_state["mailing_df"] = None
+            request_page("Mailing Builder"); st.rerun()
+
+    with st.expander("Glossario QSC — entenda cada indicador"):
+        for _, g in glossario.iterrows():
+            st.markdown(
+                f'<div class="ic"><div class="ic-sym">◆</div><div>'
+                f'<div class="ic-title" style="color:var(--purple3);">{g["titulo"]}</div>'
+                f'<div class="ic-text">{g["explicacao"]}</div></div></div>',
+                unsafe_allow_html=True
+            )
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# COMPARATIVOS TEMPORAIS
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Comparativos":
+    page_header("Comparativos temporais", "Evolucao semana a semana dos indicadores QSC e do parque movel")
+
+    df_hist = query("""
+        SELECT dt_snapshot, kpi, torre, aderentes, pct_aderencia, oportunidade_disponivel
+        FROM main.fato_snapshot_qsc_semanal
+        ORDER BY dt_snapshot ASC
+    """)
+
+    df_comp = query("SELECT * FROM main.vw_comparativo_qsc_semanal")
+
+    if df_hist.empty:
+        st.markdown("""
+        <div class="empty">
+          <div class="empty-text">Historico ainda sem dados para comparativo.</div>
+          <div style="font-size:.76rem;color:var(--dim);margin-top:8px;">
+            O snapshot QSC e inserido automaticamente em fato_snapshot_qsc_semanal a cada carga.
+            Apos a segunda carga, os comparativos aparecerao aqui.
+          </div>
+        </div>""", unsafe_allow_html=True)
+    else:
+        # tendência cards
+        sec_head("Tendencia semanal — QSC", "seta verde = melhora, vermelha = piora, amarela = estavel")
+        ARROW = {"MELHOROU": ("▲", "up", "var(--green)"),
+                 "PIOROU":   ("▼", "down", "var(--red)"),
+                 "ESTAVEL":  ("→", "neu", "var(--amber)"),
+                 "PRIMEIRO SNAPSHOT": ("—", "neu", "var(--dim)")}
+
+        cols = st.columns(3)
+        for i, (_, r) in enumerate(df_comp.iterrows()):
+            arr, cls, cor = ARROW.get(r["tendencia"], ("—","neu","var(--dim)"))
+            var_abs = safe_int(r.get("variacao_absoluta",0))
+            var_pct = round(float(r.get("variacao_pct",0) or 0), 1)
+            sign = "+" if var_abs >= 0 else ""
+            with cols[i % 3]:
+                html = (
+                    f'<div class="trend-card">'
+                    f'<div class="trend-arrow {cls}">{arr}</div>'
+                    f'<div>'
+                    f'<div class="trend-label">{r["kpi"]}</div>'
+                    f'<div class="trend-val" style="color:{cor};">{fmt_num(r["aderentes_atual"])}</div>'
+                    f'<div class="trend-sub">{sign}{var_abs} ({sign}{var_pct}%) vs semana anterior</div>'
+                    f'</div></div>'
+                )
+                st.markdown(html, unsafe_allow_html=True)
+            st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+        # grafico de linha por KPI
+        sec_head("Historico de aderencia", "evolucao grafica por indicador")
+        kpis_disp = df_hist["kpi"].unique().tolist()
+        kpi_sel = st.multiselect("Indicadores", kpis_disp,
+                                  default=[k for k in ["Debito Automatico","Biometria Parque","M16 Urgente (Movel)"] if k in kpis_disp])
+        if kpi_sel:
+            df_plot = df_hist[df_hist["kpi"].isin(kpi_sel)].copy()
+            if df_plot["dt_snapshot"].nunique() > 1:
+                fig = px.line(df_plot, x="dt_snapshot", y="aderentes", color="kpi",
+                              labels={"dt_snapshot":"Data","aderentes":"Aderentes","kpi":"Indicador"},
+                              color_discrete_sequence=PURPLE_SEQ, markers=True)
+                fig.update_traces(line_width=2, marker_size=7)
+                st.plotly_chart(style_fig(fig, h=360, show_legend=True), width="stretch")
+            else:
+                st.markdown('<div class="soft-note"><strong>Historico ainda curto:</strong> por enquanto existe apenas um snapshot carregado. Exibimos abaixo a leitura atual por indicador; a serie temporal sera formada automaticamente a partir das proximas cargas.</div>', unsafe_allow_html=True)
+                fig = px.bar(df_plot.sort_values("aderentes", ascending=False), x="aderentes", y="kpi", orientation="h",
+                             text="aderentes", color_discrete_sequence=["#5b4aa0"], labels={"aderentes":"Aderentes","kpi":"Indicador"})
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(style_fig(fig, h=320, show_legend=False), width="stretch")
+
+        # parque movel — histórico
+        df_par_hist = query("""
+            SELECT dt_snapshot,
+                   COUNT(*) AS total_linhas,
+                   COUNT(CASE WHEN flg_ativa='SIM' THEN 1 END) AS ativas,
+                   COUNT(DISTINCT cnpj) AS cnpjs,
+                   ROUND(AVG(CAST(m AS DOUBLE)),1) AS m_medio,
+                   ROUND(SUM(fat_medio),2) AS fat_total
+            FROM main.fato_linha_movel
+            GROUP BY 1 ORDER BY 1
+        """)
+        if len(df_par_hist) > 1:
+            sec_head("Evolucao do parque movel", "linhas e CNPJs ao longo dos snapshots")
+            col_a, col_b = st.columns(2, gap="large")
+            with col_a:
+                fig2 = go.Figure()
+                fig2.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["total_linhas"],
+                                          name="Total linhas", line=dict(color="#7663c6", width=2), mode="lines+markers"))
+                fig2.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["ativas"],
+                                          name="Ativas", line=dict(color="#10b981", width=2, dash="dash"), mode="lines+markers"))
+                fig2.update_layout(**plotly_dark(), height=300, showlegend=True, title_text="Linhas ao longo do tempo")
+                st.plotly_chart(fig2, width="stretch")
+            with col_b:
+                fig3 = go.Figure()
+                fig3.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["cnpjs"],
+                                          name="CNPJs", line=dict(color="#e879f9", width=2), mode="lines+markers"))
+                fig3.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["m_medio"],
+                                          name="M medio", yaxis="y2", line=dict(color="#f59e0b", width=2, dash="dot"), mode="lines+markers"))
+                fig3.update_layout(**plotly_dark(), height=300, showlegend=True, title_text="CNPJs e M medio",
+                                   yaxis2=dict(overlaying="y", side="right", color="#4d4368", gridcolor="transparent"))
+                st.plotly_chart(fig3, width="stretch")
+        else:
+            st.info("Historico do parque movel estara disponivel apos o segundo snapshot mensal.")
+
+# ══════════════════════════════════════════════════════════════════════════════
+# JORNADA POR M
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Jornada por M":
+    page_header("Jornada por maturidade (M)", "M5 = gatilho TFP (3a fatura) · M16 = ultimo ciclo antes do M17 (sai do fidelizado QSC)")
+
+    df_m = query("SELECT * FROM main.vw_jornada_cliente_m ORDER BY faixa_m")
+    CORES_F = {"URGENTE":"#f87171","Risco":"#fbbf24"}
+
+    # timeline visual horizontal
+    tl = ['<div style="display:flex;gap:10px;overflow-x:auto;padding:8px 4px 16px;scrollbar-width:thin;scrollbar-color:rgba(124,58,237,.3) transparent;">']
+    for _, row in df_m.iterrows():
+        f = row["faixa_m"]
+        cor = CORES_F.get("URGENTE","#a896db") if "URGENTE" in f else (CORES_F.get("Risco","#a896db") if "Risco" in f else "#7663c6")
+        bg = "rgba(239,68,68,.08)" if "URGENTE" in f else ("rgba(245,158,11,.06)" if "Risco" in f else "rgba(124,58,237,.06)")
+        tl.append(
+            f'<div style="flex:0 0 auto;min-width:160px;background:{bg};border:1px solid {cor}33;'
+            f'border-top:3px solid {cor};border-radius:var(--radius);padding:12px 14px;">'
+            f'<div style="font-size:.7rem;font-weight:800;color:{cor};margin-bottom:4px;">{f.split("|")[0].strip()}</div>'
+            f'<div style="font-size:1.3rem;font-weight:900;color:var(--ink);">{fmt_num(row["qt_linhas"])}</div>'
+            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.06em;">linhas</div>'
+            f'</div>'
+        )
+    tl.append('</div>')
+    st.markdown("".join(tl), unsafe_allow_html=True)
+
+    for _, row in df_m.iterrows():
+        f = row["faixa_m"]
+        cor = "#f87171" if "URGENTE" in f else ("#fbbf24" if "Risco" in f else "#7663c6")
+        html = (
+            f'<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid {cor};'
+            f'border-radius:var(--radius);padding:14px 18px;margin-bottom:8px;">'
+            f'<div style="display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">'
+            f'<div style="flex:1;min-width:200px;">'
+            f'<div style="font-size:.9rem;font-weight:800;color:var(--ink);">{f}</div>'
+            f'<div style="font-size:.74rem;color:var(--muted);margin-top:3px;">{row["acao_recomendada"]}</div>'
+            f'</div>'
+            f'<div style="display:flex;gap:18px;text-align:right;align-items:center;flex-shrink:0;">'
+            f'<div><div style="font-size:1.2rem;font-weight:900;color:{cor};">{fmt_num(row["qt_linhas"])}</div>'
+            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">linhas</div></div>'
+            f'<div><div style="font-size:1.2rem;font-weight:900;color:var(--purple3);">{fmt_num(row["qt_clientes"])}</div>'
+            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">clientes</div></div>'
+            f'<div><div style="font-size:1rem;font-weight:700;color:var(--green);">{fmt_brl(row["fat_total_faixa"])}</div>'
+            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">fat. total</div></div>'
+            f'<div style="display:flex;gap:5px;align-items:center;">'
+            f'<span style="background:rgba(16,185,129,.1);color:#34d399;font-size:.63rem;font-weight:800;padding:2px 8px;border-radius:99px;">{fmt_num(row["qt_verde"])}</span>'
+            f'<span style="background:rgba(245,158,11,.1);color:#fbbf24;font-size:.63rem;font-weight:800;padding:2px 8px;border-radius:99px;">{fmt_num(row["qt_amarelo"])}</span>'
+            f'<span style="background:rgba(239,68,68,.1);color:#f87171;font-size:.63rem;font-weight:800;padding:2px 8px;border-radius:99px;">{fmt_num(row["qt_vermelho"])}</span>'
+            f'</div></div></div></div>'
+        )
+        st.markdown(html, unsafe_allow_html=True)
+
+    col_a, col_b = st.columns(2, gap="large")
+    with col_a:
+        fig = px.bar(df_m, x="faixa_m", y="qt_linhas", color="qt_linhas",
+                     color_continuous_scale=["#e8e0ef","#8d7fbc","#5b4aa0"], text="qt_linhas",
+                     labels={"faixa_m":"","qt_linhas":"Linhas"})
+        fig.update_layout(xaxis_tickangle=-35, coloraxis_showscale=False)
+        st.plotly_chart(style_fig(fig, h=360), width="stretch")
+    with col_b:
+        fig2 = px.bar(df_m, x="faixa_m", y="fat_total_faixa", color="fat_medio_linha",
+                      color_continuous_scale=["#e8e0ef","#8d7fbc","#5b4aa0"],
+                      labels={"faixa_m":"","fat_total_faixa":"Fat. R$","fat_medio_linha":"Fat./linha"})
+        fig2.update_layout(xaxis_tickangle=-35)
+        st.plotly_chart(style_fig(fig2, h=360), width="stretch")
+
+    st.markdown('<div class="chart-help"><strong>M especifico:</strong> cada M representa o mes de vida da linha na carteira. Faixas maiores indicam linhas mais maduras; M16 e um ponto de atencao comercial.</div>', unsafe_allow_html=True)
+    m_sel = st.slider("Detalhe por M especifico", 1, 40, 16)
+    df_md = query(f"""
+        SELECT l.cnpj, c.nm_cliente, c.vertical, c.nm_contato, c.celular, l.nr_telefone,
+               l.plano, l.m, l.semaforo, ROUND(l.fat_medio,2) AS fat_medio, l.fidelizado
+        FROM main.fato_linha_movel l JOIN main.dim_cliente_hub c ON l.cnpj=c.cnpj
+        WHERE l.m={m_sel} AND l.flg_ativa='SIM'
+          AND l.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
+        ORDER BY l.fat_medio DESC LIMIT 200
+    """)
+    if not df_md.empty:
+        st.caption(f"{len(df_md)} linhas no M{m_sel}")
+        st.dataframe(df_md[["nm_cliente","vertical","nr_telefone","plano","semaforo","fidelizado","fat_medio","nm_contato","celular"]],
+                     width="stretch", hide_index=True)
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# POR VERTICAL
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Por Vertical":
+    page_header("Carteira por vertical", "Segmentacao completa por setor e atividade economica")
+
+    df_verts = query("SELECT DISTINCT COALESCE(vertical,'Nao informado') AS v FROM main.dim_cliente_hub WHERE situacao_receita='2 - ATIVA' ORDER BY 1")
+    vs = st.selectbox("Vertical", ["Todas"] + df_verts["v"].tolist())
+    filtro = "" if vs == "Todas" else f"AND COALESCE(c.vertical,'Nao informado')='{vs}'"
+
+    df_seg = query(f"""
+        SELECT COALESCE(c.vertical,'Nao informado') AS vertical, COALESCE(c.atividade_economica,'—') AS atividade,
+               COUNT(DISTINCT c.cnpj) AS clientes, SUM(COALESCE(c.qt_movel,0)) AS linhas_movel,
+               SUM(COALESCE(c.qt_banda_larga,0)) AS bl, SUM(COALESCE(c.qt_office_365,0)) AS office,
+               COUNT(DISTINCT CASE WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)=0 THEN c.cnpj END) AS sem_car
+        FROM main.dim_cliente_hub c WHERE c.situacao_receita='2 - ATIVA' {filtro}
+        GROUP BY 1,2 ORDER BY linhas_movel DESC
+    """)
+
+    c1,c2,c3,c4 = st.columns(4)
+    with c1: st.markdown(metric_card("Clientes", fmt_num(df_seg["clientes"].sum())), unsafe_allow_html=True)
+    with c2: st.markdown(metric_card("Linhas movel", fmt_num(df_seg["linhas_movel"].sum()), color_cls="cp"), unsafe_allow_html=True)
+    with c3: st.markdown(metric_card("Banda Larga", fmt_num(df_seg["bl"].sum())), unsafe_allow_html=True)
+    with c4: st.markdown(metric_card("Atividades", fmt_num(df_seg["atividade"].nunique())), unsafe_allow_html=True)
+
+    col_l, col_r = st.columns([2,1], gap="large")
+    with col_l:
+        sec_head("Por vertical x atividade")
+        st.dataframe(df_seg, width="stretch", hide_index=True)
+    with col_r:
+        if vs != "Todas":
+            sec_head(vs)
+            df_cli = query(f"""
+                SELECT c.nm_cliente, c.nm_contato, c.celular, c.cidade, COALESCE(c.qt_movel,0) AS linhas,
+                       COALESCE(c.qt_banda_larga,0) AS bl, c.primeira_oferta,
+                       CASE WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)>0 THEN 'CAR' ELSE 'OK' END AS car
+                FROM main.dim_cliente_hub c
+                WHERE COALESCE(c.vertical,'Nao informado')='{vs}' AND c.situacao_receita='2 - ATIVA'
+                ORDER BY linhas DESC LIMIT 50
+            """)
+            for _, r in df_cli.iterrows():
+                cor = "#f87171" if r["car"]=="CAR" else "#34d399"
+                bl_b = "<span style='background:rgba(56,189,248,.1);color:#38bdf8;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:99px;'>BL</span> " if r["bl"]>0 else ""
+                html = (
+                    f'<div class="clc">'
+                    f'<div class="clc-name">{r["nm_cliente"]}</div>'
+                    f'<div class="clc-sector">{r["cidade"] or "—"}</div>'
+                    f'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
+                    f'<span style="background:rgba(124,58,237,.1);color:#a896db;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:99px;">{r["linhas"]} linhas</span>'
+                    f'{bl_b}'
+                    f'<span style="background:rgba(239,68,68,.1);color:{cor};font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:99px;">{r["car"]}</span>'
+                    f'</div>'
+                    f'<div style="font-size:.7rem;color:var(--muted);font-weight:600;">{r["primeira_oferta"] or "—"}</div>'
+                    f'</div>'
+                )
+                st.markdown(html, unsafe_allow_html=True)
+        else:
+            df_top = df_seg.groupby("vertical").agg(clientes=("clientes","sum"),linhas=("linhas_movel","sum")).reset_index().sort_values("linhas",ascending=False).head(12)
+            fig = px.bar(df_top, x="linhas", y="vertical", orientation="h", color="clientes",
+                         color_continuous_scale=["#1a1235","#7663c6"], text="linhas", labels={"linhas":"Linhas","vertical":""})
+            fig.update_layout(coloraxis_showscale=False)
+            st.plotly_chart(style_fig(fig, h=460), width="stretch")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ALERTAS DA SEMANA
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Alertas da Semana":
+    page_header("Alertas da semana", "Clique em qualquer card para abrir o Mailing Builder pre-filtrado")
+
+    df_al = query("SELECT tipo_alerta, COUNT(*) AS q, COUNT(DISTINCT cnpj) AS c FROM main.vw_alertas_semana GROUP BY 1 ORDER BY 1")
+    CORES_AL = {"M16 URGENTE":("cr","#f87171"),"SAFRA TFP M5":("ca","#fbbf24"),
+                "RISCO EARLY CHURN":("cp","#a896db"),"BIOMETRIA PENDENTE":("cs","#34d399")}
+    TIPS_AL = {
+        "M16 URGENTE":"M=16 e o ultimo ciclo antes da linha virar M17 e sair do parque fidelizado QSC.",
+        "SAFRA TFP M5":"M=5 e o gatilho de cobranca da 3a fatura — janela curta para pontuar TFP.",
+        "RISCO EARLY CHURN":"Linhas em fase critica (M1-9) com semaforo comprometido.",
+        "BIOMETRIA PENDENTE":"Sem CAR e semaforo verde — acao simples de pontuacao QSC.",
+    }
+    cols = st.columns(len(df_al))
+    for i, (_, r) in enumerate(df_al.iterrows()):
+        cc, cor = CORES_AL.get(r["tipo_alerta"],("cp","#a896db"))
+        with cols[i]:
+            st.markdown(metric_card(r["tipo_alerta"], fmt_num(r["q"]),
+                                    sub=TIPS_AL.get(r["tipo_alerta"],""), color_cls=cc), unsafe_allow_html=True)
+            if st.button("Abrir mailing", key=f"al_btn_{i}", width="stretch"):
+                st.session_state["mb_tipo"] = r["tipo_alerta"]; st.session_state["mailing_df"] = None
+                request_page("Mailing Builder"); st.rerun()
+
+    tipo_sel = st.selectbox("Filtrar", ["Todos"] + df_al["tipo_alerta"].tolist())
+    filtro_al = "" if tipo_sel=="Todos" else f"WHERE tipo_alerta='{tipo_sel}'"
+    df_det = query(f"""SELECT tipo_alerta, nm_cliente, vertical, nm_contato, celular, email,
+               nr_telefone, plano, m, semaforo, ROUND(fat_medio,2) AS fat_medio, primeira_oferta
+        FROM main.vw_alertas_semana {filtro_al} ORDER BY m DESC LIMIT 500""")
+    if not df_det.empty:
+        st.caption(f"{len(df_det)} registros")
+        st.dataframe(df_det, width="stretch", hide_index=True)
+        csv = df_det.to_csv(index=False, sep=";", encoding="utf-8-sig")
+        st.download_button("Exportar CSV", csv.encode("utf-8-sig"), "alertas.csv", mime="text/csv")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# OPORTUNIDADES
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Oportunidades":
+    page_header("Oportunidades comerciais", "Clique em qualquer card para abrir o Mailing Builder")
+
+    df_op = query("SELECT oportunidade_principal, COUNT(*) AS clientes, SUM(COALESCE(qt_movel,0)) AS linhas FROM main.vw_oportunidades_comerciais GROUP BY 1 ORDER BY clientes DESC")
+    cols = st.columns(len(df_op))
+    CORES_OP = {"CONVERGENCIA FIXA+MOVEL":"#7663c6","DIGITAL — OFFICE/WORKSPACE":"#9f54c1","APARELHOS":"#f59e0b","RENOVACAO MOVEL":"#10b981","MANUTENCAO":"#4d4368"}
+    for i, (_, r) in enumerate(df_op.iterrows()):
+        cor = CORES_OP.get(r["oportunidade_principal"],"#7663c6")
+        with cols[i]:
+            st.markdown(f'<div class="mc cp" style="--border-top-color:{cor};">'
+                        f'<div class="mc-label">{r["oportunidade_principal"]}</div>'
+                        f'<div class="mc-value">{fmt_num(r["clientes"])}</div>'
+                        f'<div class="mc-sub">{fmt_num(r["linhas"])} linhas</div></div>', unsafe_allow_html=True)
+            if st.button("Mailing", key=f"op_btn_{i}", width="stretch"):
+                st.session_state["mb_tipo"] = r["oportunidade_principal"]; st.session_state["mailing_df"] = None
+                request_page("Mailing Builder"); st.rerun()
+
+    op_sel = st.selectbox("Filtrar", ["Todas"] + df_op["oportunidade_principal"].tolist())
+    filtro_op = "" if op_sel=="Todas" else f"WHERE oportunidade_principal='{op_sel}'"
+    df_det_op = query(f"SELECT cnpj, nm_cliente, vertical, nm_contato, celular, email, cidade, qt_movel, qt_linhas AS linhas_ativas, ROUND(m_medio,1) AS m_medio, ROUND(fat_total,2) AS fat_total, digital_1, primeira_oferta, oportunidade_principal FROM main.vw_oportunidades_comerciais {filtro_op} ORDER BY qt_movel DESC LIMIT 500")
+    if not df_det_op.empty:
+        st.caption(f"{len(df_det_op)} clientes")
+        st.dataframe(df_det_op, width="stretch", hide_index=True)
+        csv = df_det_op.to_csv(index=False, sep=";", encoding="utf-8-sig")
+        st.download_button("Exportar CSV", csv.encode("utf-8-sig"), "oportunidades.csv", mime="text/csv")
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+# BUSCA POR CLIENTE
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Busca por Cliente":
+    page_header("Busca por cliente", "Pesquise por CNPJ ou nome — ficha completa com status QSC")
+
+    col_inp, col_btn = st.columns([5,1])
+    with col_inp: busca = st.text_input("CNPJ ou nome", placeholder="12345678000199 ou Nome da Empresa", label_visibility="collapsed")
+    with col_btn:
+        st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+        pesquisar = st.button("Buscar", width="stretch")
+
+    if busca or pesquisar:
+        termo = busca.strip().replace(".","").replace("/","").replace("-","")
+        where = f"c.cnpj LIKE '%{termo}%'" if termo.isdigit() and len(termo)>=8 else f"UPPER(c.nm_cliente) LIKE '%{termo.upper()}%'"
+        df_res = query(f"""
+            SELECT c.cnpj, c.nm_cliente, c.vertical, c.atividade_economica, c.nm_contato,
+                   c.celular, c.email, c.cidade, c.situacao_receita,
+                   COALESCE(c.qt_movel,0) AS qt_movel, COALESCE(c.qt_banda_larga,0) AS qt_bl,
+                   COALESCE(c.qt_linha_fixa,0) AS qt_lf, COALESCE(c.qt_vivo_tech,0) AS qt_vt,
+                   COALESCE(c.qt_office_365,0) AS qt_office,
+                   COALESCE(c.vl_car_movel,0) AS car_movel, COALESCE(c.vl_car_fixa,0) AS car_fixa,
+                   c.flg_biometrado, c.primeira_oferta, c.segunda_oferta, c.terceira_oferta,
+                   c.digital_1, c.digital_2, c.digital_3, c.rec_aparelhos, c.propensao_avancada
+            FROM main.dim_cliente_hub c WHERE {where} ORDER BY c.qt_movel DESC LIMIT 20
+        """)
+        if df_res.empty:
+            st.markdown("<div class='empty'><div class='empty-text'>Nenhum cliente encontrado.</div></div>", unsafe_allow_html=True)
+        else:
+            if len(df_res)>1:
+                sel = st.selectbox(f"{len(df_res)} encontrados", df_res["nm_cliente"].tolist())
+                cli = df_res[df_res["nm_cliente"]==sel].iloc[0]
+            else:
+                cli = df_res.iloc[0]
+
+            cnpj_cli = cli["cnpj"]
+            df_linhas = query(f"""
+                SELECT nr_telefone, plano, m, semaforo, fidelizado, aparelho_modelo,
+                       ROUND(fat_medio,2) AS fat_medio, flg_m16_urgente, flg_elegivel_comercial, situacao_receita
+                FROM main.fato_linha_movel
+                WHERE cnpj='{cnpj_cli}' AND dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
+                ORDER BY m DESC
+            """)
+            df_qsc_cli = query(f"SELECT * FROM main.dim_qsc_cliente WHERE cnpj='{cnpj_cli}'")
+
+            tem_car = cli["car_movel"]+cli["car_fixa"] > 0
+            bio = cli["flg_biometrado"] == "1"
+            sit_ok = cli["situacao_receita"] == "2 - ATIVA"
+            inv = not df_qsc_cli.empty and safe_int(df_qsc_cli.iloc[0]["flg_invadido"]) == 1
+
+            # header gradiente
+            inv_badge = '<span style="background:rgba(239,68,68,.12);color:#f87171;border:1px solid rgba(239,68,68,.22);font-size:.62rem;font-weight:800;padding:3px 10px;border-radius:99px;">INVADIDO</span> ' if inv else ""
+            car_badge_c = "#f87171" if tem_car else "#34d399"
+            bio_badge_c = "#34d399" if bio else "#fbbf24"
+            sit_badge_c = "#34d399" if sit_ok else "#f87171"
+
+            header_html = (
+                f'<div style="background:linear-gradient(135deg,#120d25,#1a1235 60%,#211848);'
+                f'border:1px solid rgba(124,58,237,.22);border-radius:var(--radius-lg);'
+                f'padding:26px 28px;margin:12px 0 20px;box-shadow:0 12px 40px rgba(2,1,10,.5);">'
+                f'<div style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:14px;">'
+                f'<div>'
+                f'<div style="font-size:1.4rem;font-weight:900;color:var(--ink);letter-spacing:-.03em;">{cli["nm_cliente"]}</div>'
+                f'<div style="font-size:.8rem;color:var(--muted);margin-top:4px;">{cli["vertical"] or "—"} · {cli["atividade_economica"] or "—"}</div>'
+                f'<div style="font-size:.74rem;color:var(--dim);margin-top:8px;">CNPJ {cnpj_cli} · {cli["cidade"] or "—"}</div>'
+                f'</div>'
+                f'<div style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end;">'
+                f'{inv_badge}'
+                f'<span style="background:rgba(239,68,68,.1);color:{car_badge_c};border:1px solid rgba(239,68,68,.2);font-size:.62rem;font-weight:800;padding:3px 10px;border-radius:99px;">{"CAR" if tem_car else "Sem CAR"}</span>'
+                f'<span style="background:rgba(16,185,129,.1);color:{bio_badge_c};border:1px solid rgba(16,185,129,.2);font-size:.62rem;font-weight:800;padding:3px 10px;border-radius:99px;">{"Biometrado" if bio else "Nao biometrado"}</span>'
+                f'<span style="background:rgba(16,185,129,.1);color:{sit_badge_c};border:1px solid rgba(16,185,129,.2);font-size:.62rem;font-weight:800;padding:3px 10px;border-radius:99px;">{cli["situacao_receita"]}</span>'
+                f'</div></div></div>'
+            )
+            st.markdown(header_html, unsafe_allow_html=True)
+
+            col_a, col_b, col_c = st.columns([1.2, 1, 1.5], gap="large")
+            with col_a:
+                st.markdown('<div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;">Contato</div>', unsafe_allow_html=True)
+                for lbl, val in [("Nome",cli["nm_contato"]),("Celular",cli["celular"]),("Email",cli["email"]),("Cidade",cli["cidade"])]:
+                    st.markdown(f'<div class="fr"><span class="fl">{lbl}</span><span class="fv">{val or "—"}</span></div>', unsafe_allow_html=True)
+                st.markdown('<div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:14px 0 8px;">Produtos</div>', unsafe_allow_html=True)
+                for lbl, val in [("Movel",cli["qt_movel"]),("Banda Larga",cli["qt_bl"]),("Linha Fixa",cli["qt_lf"]),("Vivo Tech",cli["qt_vt"]),("Office 365",cli["qt_office"]),("CAR Movel",fmt_brl(cli["car_movel"])),("CAR Fixa",fmt_brl(cli["car_fixa"]))]:
+                    st.markdown(f'<div class="fr"><span class="fl">{lbl}</span><span class="fv">{val}</span></div>', unsafe_allow_html=True)
+                if not df_qsc_cli.empty:
+                    q = df_qsc_cli.iloc[0]
+                    st.markdown('<div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:14px 0 8px;">Status QSC</div>', unsafe_allow_html=True)
+                    for lbl, val in [("Debito automatico","Sim" if safe_int(q["flg_tem_debito_auto"])==1 else "Nao"),("Biometria QSC","Sim" if safe_int(q["flg_qsc_biometrado"])==1 else "Nao"),("CAR cronico",">30d" if safe_int(q["flg_car_cronico"])==1 else "—"),("Cancelamentos comerciais",safe_int(q["qt_cancelamentos_comerciais"]))]:
+                        st.markdown(f'<div class="fr"><span class="fl">{lbl}</span><span class="fv">{val}</span></div>', unsafe_allow_html=True)
+            with col_b:
+                st.markdown('<div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;">Recomendacoes Vivo</div>', unsafe_allow_html=True)
+                for lbl, val in [("1a Oferta",cli["primeira_oferta"]),("2a Oferta",cli["segunda_oferta"]),("3a Oferta",cli["terceira_oferta"])]:
+                    if val:
+                        st.markdown(f'<div class="ic"><div class="ic-sym">◆</div><div><div class="ic-title" style="color:var(--purple3);">{lbl}</div><div class="ic-text">{val}</div></div></div>', unsafe_allow_html=True)
+                for d in ["digital_1","digital_2","digital_3"]:
+                    if cli[d]:
+                        st.markdown(f'<div class="ic"><div class="ic-sym">●</div><div><div class="ic-title" style="color:var(--sky);">Digital</div><div class="ic-text">{cli[d]}</div></div></div>', unsafe_allow_html=True)
+                if cli["rec_aparelhos"]:
+                    st.markdown(f'<div class="ic"><div class="ic-sym">▲</div><div><div class="ic-title" style="color:var(--amber);">Aparelhos</div><div class="ic-text">{cli["rec_aparelhos"]}</div></div></div>', unsafe_allow_html=True)
+                if cli["propensao_avancada"]:
+                    st.markdown(f'<div class="ic"><div class="ic-sym">◆</div><div><div class="ic-title" style="color:var(--muted);">Propensao avancada</div><div class="ic-text">{cli["propensao_avancada"]}</div></div></div>', unsafe_allow_html=True)
+            with col_c:
+                st.markdown('<div style="font-size:.62rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;">Linhas movel</div>', unsafe_allow_html=True)
+                if df_linhas.empty:
+                    st.markdown("<div class='empty'><div class='empty-text'>Sem linhas no parque.</div></div>", unsafe_allow_html=True)
+                else:
+                    ativas = df_linhas[df_linhas["situacao_receita"]=="2 - ATIVA"]
+                    cc1,cc2,cc3 = st.columns(3)
+                    with cc1: st.markdown(metric_card("Ativas", fmt_num(len(ativas))), unsafe_allow_html=True)
+                    with cc2: st.markdown(metric_card("M medio", round(ativas["m"].mean(),1) if not ativas.empty else "—"), unsafe_allow_html=True)
+                    with cc3: st.markdown(metric_card("Fat. mensal", fmt_brl(ativas["fat_medio"].sum())), unsafe_allow_html=True)
+                    st.dataframe(df_linhas[["nr_telefone","plano","m","semaforo","fidelizado","aparelho_modelo","fat_medio","flg_m16_urgente","flg_elegivel_comercial"]], width="stretch", hide_index=True, height=300)
+
+# ══════════════════════════════════════════════════════════════════════════════
+# MAILING BUILDER v3
+# 6 perfis novos + QSC + alertas + todos os filtros avancados
+# ══════════════════════════════════════════════════════════════════════════════
+elif page == "Mailing Builder":
+    page_header("Mailing Builder", "Monte, filtre e exporte mailings estrategicos com todas as colunas do mapa parque")
+
+    # ── Exemplos de abordagem por campanha (card rotativo) ──────────────────
+    ABORDAGENS = {
+        "Aptos para Aparelho": {
+            "mailchimp": "Ola [FNAME], a Mirai identificou que voce tem credito pre-aprovado de R$ [CAP] para renovar o dispositivo do seu time. Sem burocracia, sem entrada — veja as opcoes.",
+            "sms": "[FNAME], credito aprovado pra aparelho novo: R$[CAP]. Responda SIM que entramos em contato.",
+            "discador": "Abertura: 'Boa tarde, falo com [NOME]? Aqui e [VENDEDOR] da Mirai — identificamos um credito de R$[CAP] para renovacao de aparelho na conta de voces. Tem 2 minutos?'",
+        },
+        "Reducao de Custo": {
+            "mailchimp": "Ola [FNAME], analisamos o plano atual e encontramos uma oportunidade de reduzir o custo mensal da frota movel mantendo a mesma cobertura. Quer ver a simulacao?",
+            "sms": "[FNAME], identificamos reducao de custo no plano Vivo de voces. Ligo esta semana para mostrar — responda SIM.",
+            "discador": "Abertura: 'Ola [NOME], sou [VENDEDOR] da Mirai. Fiz uma analise do plano de voces e tenho uma simulacao de reducao de custo para apresentar. Quando seria o melhor momento?'",
+        },
+        "Mais GB / Velocidade": {
+            "mailchimp": "Ola [FNAME], o consumo de dados da frota de voces cresceu nos ultimos meses. Temos planos com mais GB pelo mesmo valor — sem surpresas na fatura.",
+            "sms": "[FNAME], mais GB no plano sem pagar mais. Simulacao pronta — responda SIM para receber.",
+            "discador": "Abertura: 'Ola [NOME], aqui e [VENDEDOR] da Mirai. Notei que voces estao usando [X]GB por mes e o plano atual nao cobre. Tenho uma opcao que resolve sem aumentar o custo.'",
+        },
+        "Tem Fixa — Comprar Movel": {
+            "mailchimp": "Ola [FNAME], voces ja confiam na Vivo para a conexao da empresa. Agora podemos levar essa mesma qualidade para os celulares do time — com desconto de convergencia.",
+            "sms": "[FNAME], voces tem internet Vivo. Plano movel com desconto convergencia disponivel — respondaSIM.",
+            "discador": "Abertura: 'Ola [NOME], e [VENDEDOR] da Mirai. Voces ja sao clientes Vivo na parte fixa — tenho uma proposta exclusiva de movel com desconto de convergencia. Faz sentido falarmos?'",
+        },
+        "Tem Movel — Comprar Fixa": {
+            "mailchimp": "Ola [FNAME], sua empresa usa Vivo Mobile. Que tal centralizar tambem a internet e voz fixa? Convergencia gera desconto e um unico ponto de suporte.",
+            "sms": "[FNAME], internet e voz fixa Vivo com desconto por ja ser cliente movel. Interesse? Responda SIM.",
+            "discador": "Abertura: 'Bom dia [NOME], [VENDEDOR] da Mirai. Voces tem uma frota movel Vivo robusta. Gostaria de apresentar como a convergencia com a parte fixa pode gerar economia e simplificar a gestao.'",
+        },
+        "Licenciamento Digital": {
+            "mailchimp": "Ola [FNAME], a Mirai identificou que sua empresa tem perfil ideal para Microsoft 365 ou Google Workspace. Licencas a partir de R$35/usuario com suporte incluso.",
+            "sms": "[FNAME], Microsoft 365 ou Google Workspace a partir de R$35/usuario. Podemos apresentar — responda SIM.",
+            "discador": "Abertura: 'Ola [NOME], e [VENDEDOR] da Mirai. Temos uma proposta de licenciamento digital — Microsoft 365 ou Google Workspace — com valor fechado por usuario. Voces usam alguma ferramenta colaborativa hoje?'",
+        },
+    }
+
+    # ── Definicao dos 17+ tipos de campanha ─────────────────────────────────
+    TIPOS_CAMP = {
+        # --- 6 PERFIS NOVOS ---
+        "Aptos para Aparelho": {
+            "desc": "Clientes com credito pre-aprovado para troca de aparelho, classificados por R$ disponivel",
+            "icon": "▲",
+            "cor": "#f59e0b",
+            "join_op": "",
+            "where_extra": "AND c.rec_aparelhos LIKE '%capacidade de pagamento%'",
+            "order_by": "cap_credito_aparelho DESC",
+            "urgency": "oportunidade",
+        },
+        "Reducao de Custo": {
+            "desc": "Clientes com plano acima do consumo real ou com recomendacao de migracao para plano mais adequado",
+            "icon": "▼",
+            "cor": "#10b981",
+            "join_op": "",
+            "where_extra": "AND (c.recomendacao_vivo LIKE '%Renovacao%' OR c.recomendacao_vivo LIKE '%Renovação%' OR c.rec_movel LIKE '%Blindagem%')",
+            "order_by": "c.qt_movel DESC",
+            "urgency": "atencao",
+        },
+        "Mais GB / Velocidade": {
+            "desc": "Clientes com propensao a avancado movel ou cuja recomendacao menciona upgrade de GB ou Mbps",
+            "icon": "◆",
+            "cor": "#38bdf8",
+            "join_op": "",
+            "where_extra": "AND (c.propensao_avancada IS NOT NULL OR c.recomendacao_vivo LIKE '%GB%' OR c.recomendacao_vivo LIKE '%Mbps%')",
+            "order_by": "c.qt_movel DESC",
+            "urgency": "oportunidade",
+        },
+        "Tem Fixa — Comprar Movel": {
+            "desc": "Clientes com banda larga ou voz fixa mas sem linha movel — crossell convergencia",
+            "icon": "●",
+            "cor": "#9f54c1",
+            "join_op": "",
+            "where_extra": "AND (COALESCE(c.qt_banda_larga,0) > 0 OR COALESCE(c.qt_linha_fixa,0) > 0) AND COALESCE(c.qt_movel,0) = 0",
+            "order_by": "c.qt_banda_larga DESC",
+            "urgency": "oportunidade",
+        },
+        "Tem Movel — Comprar Fixa": {
+            "desc": "Clientes com movel mas sem fixa ou banda larga — crossell convergencia",
+            "icon": "●",
+            "cor": "#a896db",
+            "join_op": "",
+            "where_extra": "AND COALESCE(c.qt_movel,0) > 0 AND COALESCE(c.qt_banda_larga,0) = 0 AND COALESCE(c.qt_linha_fixa,0) = 0",
+            "order_by": "c.qt_movel DESC",
+            "urgency": "oportunidade",
+        },
+        "Licenciamento Digital": {
+            "desc": "Clientes com propensao a Microsoft 365 ou Google Workspace identificada pelo mapa parque",
+            "icon": "◆",
+            "cor": "#7663c6",
+            "join_op": "",
+            "where_extra": "AND (c.digital_1 IS NOT NULL OR c.digital_2 IS NOT NULL OR c.digital_3 IS NOT NULL)",
+            "order_by": "c.qt_movel DESC",
+            "urgency": "oportunidade",
+        },
+        # --- QSC ---
+        "P0 - RECUPERAR INVASAO": {"desc":"Cliente invadido","icon":"●","cor":"#f87171","join_op":"LEFT JOIN main.vw_motor_priorizacao_qsc mp2 ON c.cnpj=mp2.cnpj","where_extra":"AND mp.prioridade_acao='P0 - RECUPERAR INVASAO'","order_by":"c.qt_movel DESC","urgency":"urgente"},
+        "P1 - COMBO CAR+DEBITO+BIOMETRIA": {"desc":"Combo tripla","icon":"●","cor":"#e879f9","join_op":"","where_extra":"AND mp.prioridade_acao='P1 - COMBO CAR+DEBITO+BIOMETRIA'","order_by":"c.qt_movel DESC","urgency":"urgente"},
+        "P2 - BLINDAR M CRITICO SEM DEBITO": {"desc":"M1-9 sem debito","icon":"●","cor":"#fbbf24","join_op":"","where_extra":"AND mp.prioridade_acao='P2 - BLINDAR M CRITICO SEM DEBITO'","order_by":"c.qt_movel DESC","urgency":"urgente"},
+        "P3 - CAR BAIXO RECUPERAVEL": {"desc":"CAR < 30 dias","icon":"●","cor":"#a896db","join_op":"","where_extra":"AND mp.prioridade_acao='P3 - CAR BAIXO RECUPERAVEL'","order_by":"c.qt_movel DESC","urgency":"atencao"},
+        "P4 - DEBITO AUTOMATICO FACIL": {"desc":"Sem CAR, verde","icon":"●","cor":"#34d399","join_op":"","where_extra":"AND mp.prioridade_acao='P4 - DEBITO AUTOMATICO FACIL'","order_by":"c.qt_movel DESC","urgency":"positivo"},
+        "P5 - BIOMETRIA PENDENTE": {"desc":"Sem CAR, sem biometria","icon":"●","cor":"#7663c6","join_op":"","where_extra":"AND mp.prioridade_acao='P5 - BIOMETRIA PENDENTE'","order_by":"c.qt_movel DESC","urgency":"positivo"},
+        "P6 - CROSS-SELL DIGITAL PREMIUM": {"desc":"100% qualificado + propensao","icon":"●","cor":"#10b981","join_op":"","where_extra":"AND mp.prioridade_acao='P6 - CROSS-SELL DIGITAL PREMIUM'","order_by":"c.qt_movel DESC","urgency":"positivo"},
+        # --- Alertas ---
+        "M16 URGENTE": {"desc":"Linhas M16","icon":"▲","cor":"#f87171","join_op":"JOIN main.fato_linha_movel l16 ON c.cnpj=l16.cnpj AND l16.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l16.flg_m16_urgente='SIM'","where_extra":"","order_by":"c.qt_movel DESC","urgency":"urgente"},
+        "SAFRA TFP M5": {"desc":"Linhas M5","icon":"▲","cor":"#fbbf24","join_op":"JOIN main.fato_linha_movel l5 ON c.cnpj=l5.cnpj AND l5.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l5.flg_safra_tfp='SIM'","where_extra":"","order_by":"c.qt_movel DESC","urgency":"atencao"},
+        "CONVERGENCIA FIXA+MOVEL": {"desc":"Crossell fixa x movel","icon":"●","cor":"#7663c6","join_op":"","where_extra":"AND (c.rec_movel LIKE '%Aquisição%' OR c.rec_movel LIKE '%Aquisicao%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
+        "DIGITAL — OFFICE/WORKSPACE": {"desc":"Propensao digital","icon":"◆","cor":"#9f54c1","join_op":"","where_extra":"AND (c.digital_1 LIKE '%365%' OR c.digital_1 LIKE '%Workspace%' OR c.digital_2 LIKE '%365%' OR c.digital_2 LIKE '%Workspace%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
+        "Todos": {"desc":"Carteira completa","icon":"◆","cor":"#8b7eaa","join_op":"","where_extra":"","order_by":"c.qt_movel DESC","urgency":"neutro"},
+    }
+
+    # ── SELECTOR de campanha como carrossel visual ───────────────────────────
+    GRUPOS = {
+        "6 Perfis estrategicos": ["Aptos para Aparelho","Reducao de Custo","Mais GB / Velocidade","Tem Fixa — Comprar Movel","Tem Movel — Comprar Fixa","Licenciamento Digital"],
+        "Prioridades QSC": ["P0 - RECUPERAR INVASAO","P1 - COMBO CAR+DEBITO+BIOMETRIA","P2 - BLINDAR M CRITICO SEM DEBITO","P3 - CAR BAIXO RECUPERAVEL","P4 - DEBITO AUTOMATICO FACIL","P5 - BIOMETRIA PENDENTE","P6 - CROSS-SELL DIGITAL PREMIUM"],
+        "Alertas / Outros": ["M16 URGENTE","SAFRA TFP M5","CONVERGENCIA FIXA+MOVEL","DIGITAL — OFFICE/WORKSPACE","Todos"],
+    }
+
+    sec_head("Selecione a campanha", "clique em um grupo para expandir")
+    tipo_camp_default = st.session_state.get("mb_tipo", "Todos")
+
+    grupo_sel = st.radio("Grupo", list(GRUPOS.keys()), horizontal=True, key="mb_grupo")
+    opcoes_grupo = GRUPOS[grupo_sel]
+
+    # carrossel de campanha
+    slides_camp = []
+    for tc in opcoes_grupo:
+        cfg = TIPOS_CAMP.get(tc, TIPOS_CAMP["Todos"])
+        slides_camp.append({
+            "title": tc, "v_a": cfg["icon"], "l_a": "tipo",
+            "v_b": "", "l_b": "", "desc": cfg["desc"],
+            "urgency": cfg.get("urgency","neutro"), "mb_tipo": tc
+        })
+    carousel_html(slides_camp, "car_camp_sel")
+
+    tipo_camp = st.selectbox("Ou selecione direto", list(TIPOS_CAMP.keys()),
+                              index=list(TIPOS_CAMP.keys()).index(tipo_camp_default)
+                              if tipo_camp_default in TIPOS_CAMP else 0, key="mb_tipo_sel")
+
+    cfg = TIPOS_CAMP[tipo_camp]
+    cor_camp = cfg["cor"]
+
+    # ── Abordagem sugerida ───────────────────────────────────────────────────
+    abord = ABORDAGENS.get(tipo_camp)
+    if abord:
+        sec_head("Abordagem sugerida", "use como base — personalize com dados do cliente")
+        ta1, ta2, ta3 = st.tabs(["Mailchimp / Email", "SMS / 3CPlus", "Discador — script de abertura"])
+        with ta1: st.code(abord["mailchimp"], language="text")
+        with ta2: st.code(abord["sms"], language="text")
+        with ta3: st.code(abord["discador"], language="text")
+
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ── FILTROS AVANCADOS ────────────────────────────────────────────────────
+    with st.expander("Filtros avancados", expanded=True):
+        fa1, fa2, fa3 = st.columns(3)
+
+        with fa1:
+            st.markdown('<div style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;">Serasa / Situacao</div>', unsafe_allow_html=True)
+            sem_opts = ["Todos","VERDE","AMARELO","VERMELHO","PRETO"]
+            semaforo = st.selectbox("Semaforo Serasa", sem_opts, key="mb_sem")
+            sit_opts = ["Todos","2 - ATIVA","1 - INATIVA"]
+            situacao = st.selectbox("Situacao receita", sit_opts, key="mb_sit")
+
+            st.markdown('<div style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:12px 0 8px;">Vertical</div>', unsafe_allow_html=True)
+            df_verts_mb = query("SELECT DISTINCT COALESCE(vertical,'Nao informado') AS v FROM main.dim_cliente_hub WHERE situacao_receita='2 - ATIVA' ORDER BY 1")
+            verts_mb = st.multiselect("Vertical", df_verts_mb["v"].tolist(), key="mb_verts")
+
+        with fa2:
+            st.markdown('<div style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;">Linhas e Maturidade</div>', unsafe_allow_html=True)
+            min_linhas, max_linhas = st.slider("Faixa de linhas movel", 0, 500, (0, 500), key="mb_linhas")
+            min_m, max_m = st.slider("Faixa de M", 1, 40, (1, 40), key="mb_m")
+
+            st.markdown('<div style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:12px 0 8px;">Credito de aparelho (R$)</div>', unsafe_allow_html=True)
+            min_cred, max_cred = st.slider("Credito aprovado", 0, 50000, (0, 50000), step=1000, key="mb_cred")
+
+        with fa3:
+            st.markdown('<div style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin-bottom:8px;">QSC e Perfil</div>', unsafe_allow_html=True)
+            car_flt = st.selectbox("CAR", ["Todos","Sem CAR (apenas)","Com CAR"], key="mb_car")
+            bio_flt = st.selectbox("Biometria", ["Todos","Biometrados","Nao biometrados"], key="mb_bio")
+            nao_perturbe = st.checkbox("Excluir Nao Perturbe", value=True, key="mb_np")
+
+            st.markdown('<div style="font-size:.68rem;font-weight:800;text-transform:uppercase;letter-spacing:.08em;color:var(--dim);margin:12px 0 8px;">Digital</div>', unsafe_allow_html=True)
+            digital_flt = st.multiselect("Propensao digital", ["Microsoft 365","Google Workspace","Outra propensao","Sem propensao"], key="mb_dig")
+
+            limite = st.number_input("Limite de registros", 10, 5000, 500, step=50, key="mb_lim")
+
+    # ── Montar WHERE ─────────────────────────────────────────────────────────
+    wheres = ["c.situacao_receita != 'NENHUMA'"]
+
+    if situacao != "Todos":
+        wheres.append(f"c.situacao_receita='{situacao}'")
+    else:
+        wheres.append("c.situacao_receita='2 - ATIVA'")
+
+    if semaforo != "Todos":
+        wheres.append(f"la.semaforo_predominante='{semaforo}'")
+
+    if verts_mb:
+        vs_str = ",".join(f"'{v}'" for v in verts_mb)
+        wheres.append(f"COALESCE(c.vertical,'Nao informado') IN ({vs_str})")
+
+    wheres.append(f"COALESCE(c.qt_movel,0) BETWEEN {min_linhas} AND {max_linhas}")
+
+    if min_m > 1 or max_m < 40:
+        wheres.append(f"COALESCE(la.m_medio,0) BETWEEN {min_m} AND {max_m}")
+
+    if min_cred > 0 or max_cred < 50000:
+        wheres.append(f"COALESCE(TRY_CAST(REGEXP_EXTRACT(c.rec_aparelhos,'capacidade de pagamento de R\\$([0-9]+)',1) AS DOUBLE),-1) BETWEEN {min_cred} AND {max_cred}")
+
+    if car_flt == "Sem CAR (apenas)":
+        wheres.append("COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)=0")
+    elif car_flt == "Com CAR":
+        wheres.append("COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)>0")
+
+    if bio_flt == "Biometrados":
+        wheres.append("c.flg_biometrado='1'")
+    elif bio_flt == "Nao biometrados":
+        wheres.append("(c.flg_biometrado IS NULL OR c.flg_biometrado='0')")
+
+    if nao_perturbe:
+        wheres.append("(c.flg_nao_perturbe IS NULL OR c.flg_nao_perturbe='0')")
+
+    if digital_flt:
+        dig_conditions = []
+        if "Microsoft 365" in digital_flt:
+            dig_conditions.append("(c.digital_1 LIKE '%365%' OR c.digital_2 LIKE '%365%' OR c.digital_3 LIKE '%365%')")
+        if "Google Workspace" in digital_flt:
+            dig_conditions.append("(c.digital_1 LIKE '%Workspace%' OR c.digital_2 LIKE '%Workspace%')")
+        if "Outra propensao" in digital_flt:
+            dig_conditions.append("(c.digital_1 IS NOT NULL OR c.digital_2 IS NOT NULL OR c.digital_3 IS NOT NULL)")
+        if "Sem propensao" in digital_flt:
+            dig_conditions.append("(c.digital_1 IS NULL AND c.digital_2 IS NULL AND c.digital_3 IS NULL)")
+        if dig_conditions:
+            wheres.append("(" + " OR ".join(dig_conditions) + ")")
+
+    # WHERE da campanha especifica
+    where_camp = cfg.get("where_extra","")
+    if where_camp:
+        wheres.append(where_camp.lstrip("AND "))
+
+    where_sql = " AND ".join(wheres)
+    join_op   = cfg.get("join_op","")
+    order_by  = cfg.get("order_by","c.qt_movel DESC")
+
+    # ── Gerar mailing ─────────────────────────────────────────────────────────
+    col_g, col_r2 = st.columns([1,3])
+    with col_g:
+        gerar = st.button("Gerar mailing", width="stretch", key="mb_gerar")
+        if st.button("Limpar", width="stretch", key="mb_clear"):
+            st.session_state["mailing_df"] = None
+            st.rerun()
+
+    if gerar:
+        sql = f"""
+        WITH linha_agg AS (
+            SELECT cnpj,
+                   ROUND(AVG(m),1) AS m_medio,
+                   ROUND(SUM(fat_medio),2) AS fat_total,
+                   MODE(semaforo) AS semaforo_predominante
+            FROM main.fato_linha_movel
+            WHERE dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
+            GROUP BY cnpj
+        )
+        SELECT
+            c.*,
+            SPLIT_PART(COALESCE(c.nm_contato,''),' ',1) AS primeiro_nome,
+            CASE WHEN ARRAY_LENGTH(STRING_SPLIT(COALESCE(c.nm_contato,''),' '))>1
+                 THEN SPLIT_PART(COALESCE(c.nm_contato,''),' ',2) ELSE '' END AS sobrenome,
+            REGEXP_REPLACE(COALESCE(c.celular::VARCHAR,''),'[^0-9]','','g') AS telefone,
+            COALESCE(c.qt_movel,0) AS qt_bl_check,
+            TRY_CAST(REGEXP_EXTRACT(c.rec_aparelhos,'capacidade de pagamento de R\\$([0-9]+)',1) AS DOUBLE) AS cap_credito_aparelho,
+            la.m_medio,
+            la.fat_total,
+            la.semaforo_predominante,
+            COALESCE(mp.flg_tem_debito_auto,0) AS flg_tem_debito_auto,
+            COALESCE(mp.flg_qsc_biometrado,0) AS flg_qsc_biometrado,
+            COALESCE(mp.flg_car_cronico,0) AS flg_car_cronico,
+            mp.score_prioridade,
+            mp.explicacao_acao,
+            mp.prioridade_acao AS prioridade_acao_qsc,
+            c.vertical || ', ' ||
+            CASE WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)=0
+                 THEN 'sem-car' ELSE 'com-car' END ||
+            ', ' || CASE WHEN c.flg_biometrado='1' THEN 'biometrado' ELSE 'nao-biometrado' END AS tags_mailchimp
+        FROM main.dim_cliente_hub c
+        JOIN linha_agg la ON c.cnpj=la.cnpj
+        JOIN main.fato_linha_movel l ON c.cnpj=l.cnpj
+          AND l.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
+        LEFT JOIN main.vw_motor_priorizacao_qsc mp ON c.cnpj=mp.cnpj
+        {join_op}
+        WHERE {where_sql}
+        QUALIFY ROW_NUMBER() OVER (PARTITION BY c.cnpj ORDER BY l.fat_medio DESC) = 1
+        ORDER BY {order_by} LIMIT {int(limite)}
+        """
+        try:
+            df_mail = query(sql)
+            st.session_state["mailing_df"] = df_mail
+        except Exception as e:
+            st.error(f"Erro: {e}")
+            df_mail = pd.DataFrame()
+    else:
+        _cached = st.session_state.get("mailing_df")
+        df_mail = _cached if _cached is not None else pd.DataFrame()
+
+    # ── Preview e metricas ────────────────────────────────────────────────────
+    if not df_mail.empty:
+        pct_email = 100 * df_mail["email"].notna().sum() / len(df_mail)
+        pct_tel   = 100 * (df_mail["telefone"].str.len() >= 10).sum() / len(df_mail)
+        pct_sem_car = 100 * (df_mail["vl_car_movel"].fillna(0) + df_mail["vl_car_fixa"].fillna(0) == 0).sum() / len(df_mail)
+        qualidade_score = round((pct_email + pct_tel + pct_sem_car) / 3, 0)
+
+        m1, m2, m3, m4 = st.columns(4)
+        with m1: st.markdown(metric_card("Registros", fmt_num(len(df_mail)),
+                             sub=f"campanha: {tipo_camp[:30]}", color_cls="cp"), unsafe_allow_html=True)
+        with m2: st.markdown(metric_card("Com email", fmt_num(df_mail["email"].notna().sum()),
+                             sub=f"{pct_email:.0f}% atingidos Mailchimp"), unsafe_allow_html=True)
+        with m3: st.markdown(metric_card("Com telefone", fmt_num((df_mail["telefone"].str.len() >= 10).sum()),
+                             sub=f"{pct_tel:.0f}% atingidos 3CPlus/SMS"), unsafe_allow_html=True)
+        with m4: st.markdown(metric_card("Qualidade", f"{qualidade_score:.0f}%",
+                             sub="email + tel + sem CAR", bar_pct=qualidade_score, color_cls="cg"), unsafe_allow_html=True)
+
+        sec_head("Preview", "primeiros registros da lista gerada")
+        cols_prev = [c for c in ["nm_cliente","vertical","email","celular","qt_movel",
+                                  "m_medio","semaforo_predominante","primeira_oferta",
+                                  "digital_1","cap_credito_aparelho","prioridade_acao_qsc"]
+                     if c in df_mail.columns]
+        st.dataframe(df_mail[cols_prev], width="stretch", hide_index=True, height=280)
+
+        # ── Exportar ──────────────────────────────────────────────────────────
+        sec_head("Exportar", "todas as 50+ colunas do mapa parque incluidas em qualquer formato")
+        _cols_tecnicas = {"tags_mailchimp","sobrenome","primeiro_nome","telefone","qt_bl_check"}
+
+        col_mc, col_3c, col_sms, col_csv = st.columns(4)
+
+        with col_mc:
+            st.markdown('<div class="export-card"><div class="export-title">Mailchimp</div>', unsafe_allow_html=True)
+            df_mc = pd.DataFrame({
+                "Email Address": df_mail["email"],
+                "First Name": df_mail["primeiro_nome"],
+                "Last Name": df_mail["sobrenome"],
+                "Phone": df_mail["telefone"],
+                "Tags": df_mail["tags_mailchimp"],
+            })
+            for col in df_mail.columns:
+                if col not in _cols_tecnicas and col not in df_mc.columns and col != "email":
+                    df_mc[col] = df_mail[col]
+            csv_mc = df_mc.to_csv(index=False, encoding="utf-8-sig")
+            st.download_button("Baixar Mailchimp CSV", data=csv_mc.encode("utf-8-sig"),
+                               file_name=f"mailchimp_{tipo_camp[:20].replace(' ','_')}.csv",
+                               mime="text/csv", width="stretch")
+            st.caption(f"{df_mc['Email Address'].notna().sum()} com email · {len(df_mc.columns)} colunas")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with col_3c:
+            st.markdown('<div class="export-card"><div class="export-title">3CPlus / Discador</div>', unsafe_allow_html=True)
+            df_3c = pd.DataFrame({
+                "TELEFONE": df_mail["telefone"],
+                "PRIMEIRO_NOME": df_mail["primeiro_nome"],
+                "NOME_COMPLETO": df_mail["nm_contato"],
+            })
+            for col in df_mail.columns:
+                if col not in _cols_tecnicas and col not in df_3c.columns:
+                    df_3c[col.upper()] = df_mail[col]
+            csv_3c = df_3c.to_csv(index=False, sep=";", encoding="utf-8-sig")
+            st.download_button("Baixar 3CPlus CSV", data=csv_3c.encode("utf-8-sig"),
+                               file_name=f"3cplus_{tipo_camp[:20].replace(' ','_')}.csv",
+                               mime="text/csv", width="stretch")
+            st.caption(f"{(df_3c['TELEFONE'].str.len() >= 10).sum()} com tel · {len(df_3c.columns)} colunas")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with col_sms:
+            st.markdown('<div class="export-card"><div class="export-title">SMS Teste</div>', unsafe_allow_html=True)
+            df_sms = pd.DataFrame({
+                "TELEFONE": df_mail["telefone"],
+                "NOME": df_mail["primeiro_nome"],
+                "EMPRESA": df_mail["nm_cliente"],
+            })
+            # limitar a 50 para SMS teste
+            df_sms_test = df_sms[df_sms["TELEFONE"].str.len() >= 10].head(50)
+            csv_sms = df_sms_test.to_csv(index=False, sep=";", encoding="utf-8-sig")
+            st.download_button("Baixar SMS Teste (50)", data=csv_sms.encode("utf-8-sig"),
+                               file_name=f"sms_teste_{tipo_camp[:15].replace(' ','_')}.csv",
+                               mime="text/csv", width="stretch")
+            abord_sms = ABORDAGENS.get(tipo_camp, {}).get("sms","")
+            if abord_sms:
+                st.caption("Template sugerido:")
+                st.code(abord_sms[:80]+"...", language="text")
+            else:
+                st.caption(f"{len(df_sms_test)} numeros validos para disparo teste")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+        with col_csv:
+            st.markdown('<div class="export-card"><div class="export-title">Mapa Parque Completo</div>', unsafe_allow_html=True)
+            st.caption("Todas as colunas do mapa parque + campos calculados.")
+            df_custom = df_mail.copy()
+            csv_custom = df_custom.to_csv(index=False, sep=";", encoding="utf-8-sig")
+            st.download_button("Baixar CSV completo", data=csv_custom.encode("utf-8-sig"),
+                               file_name=f"mailing_{tipo_camp[:20].replace(' ','_')}.csv",
+                               mime="text/csv", width="stretch")
+            st.caption(f"{len(df_custom)} registros · {len(df_custom.columns)} colunas")
+            st.markdown('</div>', unsafe_allow_html=True)
+
+    elif gerar:
+        st.markdown("<div class='empty'><div class='empty-text'>Nenhum cliente com esses filtros. Tente ampliar os criterios.</div></div>",
+                    unsafe_allow_html=True)
+    else:
+        st.markdown("<div class='empty'><div class='empty-text'>Configure os filtros e clique em Gerar mailing.</div></div>",
+                    unsafe_allow_html=True)
