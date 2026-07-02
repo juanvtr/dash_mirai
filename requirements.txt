@@ -5,3 +5,7 @@ openpyxl>=3.1.0
 lxml
 requests>=2.28.0
 supabase>=2.0.0
+streamlit>=1.46
+pandas>=2.2
+duckdb>=1.0
+plotly>=5.22
