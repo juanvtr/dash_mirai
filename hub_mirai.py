@@ -1442,6 +1442,61 @@ def clean_dimension_dataframe(df: pd.DataFrame, column: str) -> pd.DataFrame:
     out = out[~out[column].isin(invalid)]
     return out.drop_duplicates(subset=[column]).sort_values(column).reset_index(drop=True)
 
+
+@st.cache_data(ttl=3600)
+def get_map_parque_schema() -> pd.DataFrame:
+    """Retorna as colunas reais do mapa parque (dim_cliente_hub) em ordem física."""
+    try:
+        df = query("""
+            SELECT column_name, data_type, ordinal_position
+            FROM information_schema.columns
+            WHERE table_schema = 'main'
+              AND table_name = 'dim_cliente_hub'
+            ORDER BY ordinal_position
+        """)
+        if not df.empty:
+            return df
+    except Exception:
+        pass
+
+    # fallback DuckDB/MotherDuck
+    try:
+        df = query("PRAGMA table_info('main.dim_cliente_hub')")
+        if not df.empty and 'name' in df.columns:
+            return pd.DataFrame({
+                'column_name': df['name'].astype(str),
+                'data_type': df.get('type', pd.Series(['VARCHAR'] * len(df))).astype(str),
+                'ordinal_position': range(1, len(df) + 1),
+            })
+    except Exception:
+        pass
+
+    # último fallback: o DataFrame vazio ainda preserva os nomes das colunas
+    try:
+        probe = query("SELECT * FROM main.dim_cliente_hub LIMIT 0")
+        if len(probe.columns) > 0:
+            return pd.DataFrame({
+                'column_name': [str(c) for c in probe.columns],
+                'data_type': ['VARCHAR'] * len(probe.columns),
+                'ordinal_position': range(1, len(probe.columns) + 1),
+            })
+    except Exception:
+        pass
+
+    return pd.DataFrame(columns=['column_name', 'data_type', 'ordinal_position'])
+
+
+def quote_sql_identifier(name: str) -> str:
+    """Escapa identificadores permitidos vindos do schema do banco."""
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def is_numeric_sql_type(data_type: str) -> bool:
+    dt = str(data_type).upper()
+    return any(token in dt for token in (
+        'INT', 'DECIMAL', 'NUMERIC', 'DOUBLE', 'FLOAT', 'REAL', 'HUGEINT'
+    ))
+
 def delta_html(val, prev, suffix=""):
     if prev is None or prev == 0:
         return '<div class="mc-delta neu">— sem referencia anterior</div>'
@@ -2818,6 +2873,16 @@ elif page == "Mailing Builder":
 
     # ── Definicao dos 17+ tipos de campanha ─────────────────────────────────
     TIPOS_CAMP = {
+        # --- PERSONALIZADO ---
+        "PERSONALIZADO — LIVRE": {
+            "desc": "Carteira livre: combine filtros gerais com regras em qualquer coluna do mapa parque e escolha exatamente quais campos exportar",
+            "icon": "✦",
+            "cor": "#6957b8",
+            "join_op": "",
+            "where_extra": "",
+            "order_by": "c.qt_movel DESC",
+            "urgency": "oportunidade",
+        },
         # --- 6 PERFIS NOVOS ---
         "Aptos para Aparelho": {
             "desc": "Clientes com credito pre-aprovado para troca de aparelho, classificados por R$ disponivel",
@@ -2891,6 +2956,7 @@ elif page == "Mailing Builder":
 
     # ── SELECTOR de campanha como carrossel visual ───────────────────────────
     GRUPOS = {
+        "Personalizado": ["PERSONALIZADO — LIVRE"],
         "6 Perfis estrategicos": ["Aptos para Aparelho","Reducao de Custo","Mais GB / Velocidade","Tem Fixa — Comprar Movel","Tem Movel — Comprar Fixa","Licenciamento Digital"],
         "Prioridades QSC": ["P0 - RECUPERAR INVASAO","P1 - COMBO CAR+DEBITO+BIOMETRIA","P2 - BLINDAR M CRITICO SEM DEBITO","P3 - CAR BAIXO RECUPERAVEL","P4 - DEBITO AUTOMATICO FACIL","P5 - BIOMETRIA PENDENTE","P6 - CROSS-SELL DIGITAL PREMIUM"],
         "Alertas / Outros": ["M16 URGENTE","SAFRA TFP M5","CONVERGENCIA FIXA+MOVEL","DIGITAL — OFFICE/WORKSPACE","Todos"],
@@ -2966,6 +3032,64 @@ elif page == "Mailing Builder":
 
             limite = st.number_input("Limite de registros", 10, 5000, 500, step=50, key="mb_lim")
 
+    # ── FILTROS LIVRES DO MAPA PARQUE ────────────────────────────────────────
+    schema_map = get_map_parque_schema()
+    map_cols_schema = schema_map["column_name"].astype(str).tolist() if not schema_map.empty else []
+    map_type_by_col = (
+        dict(zip(schema_map["column_name"].astype(str), schema_map["data_type"].astype(str)))
+        if not schema_map.empty else {}
+    )
+
+    custom_rules = []
+    with st.expander("Filtros livres do mapa parque", expanded=(tipo_camp == "PERSONALIZADO — LIVRE")):
+        st.caption("Combine até 6 regras em qualquer coluna real do mapa parque. As regras são aplicadas com AND aos filtros acima.")
+        qtd_regras = st.slider("Quantidade de regras livres", 0, 6, 0, key="mb_qtd_regras")
+
+        OPERADORES = [
+            "igual a", "diferente de", "contém", "não contém",
+            "maior que", "maior ou igual", "menor que", "menor ou igual",
+            "entre", "é nulo", "não é nulo"
+        ]
+
+        for i in range(qtd_regras):
+            r1, r2, r3 = st.columns([2.1, 1.4, 2.1])
+            with r1:
+                campo = st.selectbox(
+                    f"Campo {i+1}",
+                    map_cols_schema,
+                    key=f"mb_rule_field_{i}",
+                )
+            with r2:
+                operador = st.selectbox(
+                    f"Operador {i+1}",
+                    OPERADORES,
+                    key=f"mb_rule_op_{i}",
+                )
+            with r3:
+                if operador in {"é nulo", "não é nulo"}:
+                    valor = ""
+                    st.text_input(
+                        f"Valor {i+1}",
+                        value="não necessário",
+                        disabled=True,
+                        key=f"mb_rule_value_disabled_{i}",
+                    )
+                else:
+                    ajuda = "Para 'entre', use valor inicial | valor final. Ex.: 10 | 50" if operador == "entre" else None
+                    valor = st.text_input(
+                        f"Valor {i+1}",
+                        key=f"mb_rule_value_{i}",
+                        help=ajuda,
+                    )
+
+            if campo:
+                custom_rules.append({
+                    "campo": campo,
+                    "operador": operador,
+                    "valor": valor,
+                    "data_type": map_type_by_col.get(campo, "VARCHAR"),
+                })
+
     # ── Montar WHERE ─────────────────────────────────────────────────────────
     wheres = ["c.situacao_receita != 'NENHUMA'"]
     sql_params = []
@@ -3023,6 +3147,93 @@ elif page == "Mailing Builder":
             dig_conditions.append("(c.digital_1 IS NULL AND c.digital_2 IS NULL AND c.digital_3 IS NULL)")
         if dig_conditions:
             wheres.append("(" + " OR ".join(dig_conditions) + ")")
+
+    # Regras livres do mapa parque. O nome da coluna só entra no SQL após
+    # validação contra o schema real; valores continuam 100% parametrizados.
+    allowed_map_cols = set(map_cols_schema)
+    for regra in custom_rules:
+        campo = regra["campo"]
+        operador = regra["operador"]
+        valor = clean_text_value(regra.get("valor", ""))
+        data_type = regra.get("data_type", "VARCHAR")
+
+        if campo not in allowed_map_cols:
+            continue
+
+        ident = f"c.{quote_sql_identifier(campo)}"
+
+        if operador == "é nulo":
+            wheres.append(f"{ident} IS NULL")
+            continue
+        if operador == "não é nulo":
+            wheres.append(f"{ident} IS NOT NULL")
+            continue
+        if not valor:
+            continue
+
+        if operador == "contém":
+            wheres.append(f"CAST({ident} AS VARCHAR) ILIKE ?")
+            sql_params.append(f"%{valor}%")
+        elif operador == "não contém":
+            wheres.append(f"CAST({ident} AS VARCHAR) NOT ILIKE ?")
+            sql_params.append(f"%{valor}%")
+        elif operador == "igual a":
+            if is_numeric_sql_type(data_type):
+                try:
+                    valor_num = float(valor.replace(',', '.'))
+                    wheres.append(f"TRY_CAST({ident} AS DOUBLE) = ?")
+                    sql_params.append(valor_num)
+                except ValueError:
+                    wheres.append(f"CAST({ident} AS VARCHAR) = ?")
+                    sql_params.append(valor)
+            else:
+                wheres.append(f"CAST({ident} AS VARCHAR) = ?")
+                sql_params.append(valor)
+        elif operador == "diferente de":
+            if is_numeric_sql_type(data_type):
+                try:
+                    valor_num = float(valor.replace(',', '.'))
+                    wheres.append(f"TRY_CAST({ident} AS DOUBLE) != ?")
+                    sql_params.append(valor_num)
+                except ValueError:
+                    wheres.append(f"CAST({ident} AS VARCHAR) != ?")
+                    sql_params.append(valor)
+            else:
+                wheres.append(f"CAST({ident} AS VARCHAR) != ?")
+                sql_params.append(valor)
+        elif operador in {"maior que", "maior ou igual", "menor que", "menor ou igual"}:
+            op_sql = {
+                "maior que": ">",
+                "maior ou igual": ">=",
+                "menor que": "<",
+                "menor ou igual": "<=",
+            }[operador]
+            if is_numeric_sql_type(data_type):
+                try:
+                    valor_num = float(valor.replace(',', '.'))
+                    wheres.append(f"TRY_CAST({ident} AS DOUBLE) {op_sql} ?")
+                    sql_params.append(valor_num)
+                except ValueError:
+                    st.warning(f"Regra ignorada: {campo} exige valor numérico para '{operador}'.")
+            else:
+                wheres.append(f"CAST({ident} AS VARCHAR) {op_sql} ?")
+                sql_params.append(valor)
+        elif operador == "entre":
+            partes = [clean_text_value(v) for v in valor.split('|')]
+            if len(partes) != 2:
+                st.warning(f"Regra ignorada: em '{campo}', use 'início | fim' no operador entre.")
+                continue
+            if is_numeric_sql_type(data_type):
+                try:
+                    v1 = float(partes[0].replace(',', '.'))
+                    v2 = float(partes[1].replace(',', '.'))
+                    wheres.append(f"TRY_CAST({ident} AS DOUBLE) BETWEEN ? AND ?")
+                    sql_params.extend([v1, v2])
+                except ValueError:
+                    st.warning(f"Regra ignorada: {campo} exige dois valores numéricos no operador entre.")
+            else:
+                wheres.append(f"CAST({ident} AS VARCHAR) BETWEEN ? AND ?")
+                sql_params.extend(partes)
 
     # WHERE da campanha especifica vem de configuracao interna, nao da interface
     where_camp = cfg.get("where_extra","")
@@ -3118,11 +3329,161 @@ elif page == "Mailing Builder":
                      if c in df_mail.columns]
         st.dataframe(df_mail[cols_prev], width="stretch", hide_index=True, height=280)
 
-        # ── Exportar ──────────────────────────────────────────────────────────
-        sec_head("Exportar", "todas as 50+ colunas do mapa parque incluidas em qualquer formato")
+        # ── MAILING PERSONALIZADO ────────────────────────────────────────────
+        sec_head("Mailing personalizado", "escolha campos, ordem, nomes de saída e formato do CSV")
+
+        map_cols_disponiveis = [c for c in map_cols_schema if c in df_mail.columns]
+        campos_calculados = [c for c in df_mail.columns if c not in map_cols_disponiveis]
+        todos_campos_export = map_cols_disponiveis + campos_calculados
+
+        PRESETS_PERSONALIZADOS = {
+            "Essencial comercial": [
+                "cnpj", "nm_cliente", "nm_contato", "celular", "email",
+                "vertical", "atividade_economica", "cidade", "qt_movel",
+                "qt_banda_larga", "qt_linha_fixa", "primeira_oferta",
+                "segunda_oferta", "terceira_oferta"
+            ],
+            "QSC e risco": [
+                "cnpj", "nm_cliente", "vertical", "nm_contato", "celular", "email",
+                "vl_car_movel", "vl_car_fixa", "flg_biometrado",
+                "flg_tem_debito_auto", "flg_qsc_biometrado", "flg_car_cronico",
+                "score_prioridade", "prioridade_acao_qsc", "explicacao_acao",
+                "m_medio", "semaforo_predominante", "fat_total"
+            ],
+            "Ofertas e propensoes": [
+                "cnpj", "nm_cliente", "vertical", "nm_contato", "celular", "email",
+                "qt_movel", "qt_banda_larga", "qt_linha_fixa", "qt_vivo_tech",
+                "qt_office_365", "primeira_oferta", "segunda_oferta", "terceira_oferta",
+                "digital_1", "digital_2", "digital_3", "rec_aparelhos",
+                "rec_movel", "recomendacao_vivo", "propensao_avancada",
+                "cap_credito_aparelho"
+            ],
+            "Mapa parque completo": map_cols_disponiveis,
+            "Mapa + calculados": todos_campos_export,
+            "Começar do zero": [],
+        }
+
+        p1, p2, p3 = st.columns([1.5, 1, 1])
+        with p1:
+            preset_sel = st.selectbox(
+                "Preset de colunas",
+                list(PRESETS_PERSONALIZADOS.keys()),
+                key="mb_custom_preset",
+            )
+        with p2:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            aplicar_preset = st.button("Aplicar preset", width="stretch", key="mb_apply_preset")
+        with p3:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            selecionar_tudo = st.button("Selecionar tudo", width="stretch", key="mb_select_all_cols")
+
+        if "mb_custom_cols" not in st.session_state:
+            st.session_state["mb_custom_cols"] = [
+                c for c in PRESETS_PERSONALIZADOS["Essencial comercial"] if c in todos_campos_export
+            ]
+
+        if aplicar_preset:
+            st.session_state["mb_custom_cols"] = [
+                c for c in PRESETS_PERSONALIZADOS[preset_sel] if c in todos_campos_export
+            ]
+        if selecionar_tudo:
+            st.session_state["mb_custom_cols"] = list(todos_campos_export)
+
+        colunas_personalizadas = st.multiselect(
+            "Colunas do mailing — a ordem escolhida será a ordem do arquivo",
+            options=todos_campos_export,
+            key="mb_custom_cols",
+            help="As colunas do mapa parque vêm primeiro; campos calculados do hub também podem ser adicionados.",
+        )
+
+        with st.expander("Configuração avançada do arquivo personalizado", expanded=False):
+            ca1, ca2, ca3 = st.columns(3)
+            with ca1:
+                separador_label = st.selectbox(
+                    "Separador",
+                    ["Ponto e vírgula (;) ", "Vírgula (,)", "Tabulação"],
+                    key="mb_custom_sep",
+                )
+            with ca2:
+                ordenar_por = st.selectbox(
+                    "Ordenar por",
+                    ["Sem ordenação"] + colunas_personalizadas,
+                    key="mb_custom_sort",
+                )
+            with ca3:
+                ordem_desc = st.checkbox("Ordem decrescente", value=True, key="mb_custom_desc")
+
+            dedup_cols = st.multiselect(
+                "Remover duplicados usando",
+                options=colunas_personalizadas,
+                default=["cnpj"] if "cnpj" in colunas_personalizadas else [],
+                key="mb_custom_dedup",
+                help="Deixe vazio para não remover duplicados adicionais.",
+            )
+
+            rename_text = st.text_area(
+                "Renomear colunas (uma por linha: coluna_original=novo_nome)",
+                placeholder="nm_cliente=EMPRESA\ncelular=TELEFONE\nprimeira_oferta=OFERTA_PRIORITARIA",
+                key="mb_custom_rename",
+            )
+
+        if colunas_personalizadas:
+            df_personalizado = df_mail[colunas_personalizadas].copy()
+
+            if dedup_cols:
+                df_personalizado = df_personalizado.drop_duplicates(subset=dedup_cols)
+
+            if ordenar_por != "Sem ordenação" and ordenar_por in df_personalizado.columns:
+                df_personalizado = df_personalizado.sort_values(
+                    ordenar_por,
+                    ascending=not ordem_desc,
+                    na_position="last",
+                )
+
+            rename_map = {}
+            for linha in rename_text.splitlines():
+                if "=" not in linha:
+                    continue
+                origem, destino = linha.split("=", 1)
+                origem = origem.strip()
+                destino = destino.strip()
+                if origem in df_personalizado.columns and destino:
+                    rename_map[origem] = destino
+            if rename_map:
+                df_personalizado = df_personalizado.rename(columns=rename_map)
+
+            sep_map = {
+                "Ponto e vírgula (;) ": ";",
+                "Vírgula (,)": ",",
+                "Tabulação": "\t",
+            }
+            sep_custom = sep_map[separador_label]
+
+            st.caption(
+                f"Preview personalizado · {len(df_personalizado)} registros · "
+                f"{len(df_personalizado.columns)} colunas selecionadas"
+            )
+            st.dataframe(df_personalizado.head(100), width="stretch", hide_index=True, height=300)
+
+            csv_personalizado = df_personalizado.to_csv(
+                index=False, sep=sep_custom, encoding="utf-8-sig"
+            )
+            st.download_button(
+                "Baixar mailing personalizado",
+                data=csv_personalizado.encode("utf-8-sig"),
+                file_name=f"mailing_personalizado_{tipo_camp[:24].replace(' ','_')}.csv",
+                mime="text/csv",
+                width="stretch",
+                key="mb_download_personalizado",
+            )
+        else:
+            st.info("Selecione pelo menos uma coluna para gerar o mailing personalizado.")
+
+        # ── FORMATOS PRONTOS ──────────────────────────────────────────────────
+        sec_head("Formatos prontos", "mantenha os layouts operacionais quando precisar")
         _cols_tecnicas = {"tags_mailchimp","sobrenome","primeiro_nome","telefone","qt_bl_check"}
 
-        col_mc, col_3c, col_sms, col_csv = st.columns(4)
+        col_mc, col_3c, col_full = st.columns(3)
 
         with col_mc:
             st.markdown('<div class="export-card"><div class="export-title">Mailchimp</div>', unsafe_allow_html=True)
@@ -3133,14 +3494,16 @@ elif page == "Mailing Builder":
                 "Phone": df_mail["telefone"],
                 "Tags": df_mail["tags_mailchimp"],
             })
-            for col in df_mail.columns:
-                if col not in _cols_tecnicas and col not in df_mc.columns and col != "email":
-                    df_mc[col] = df_mail[col]
             csv_mc = df_mc.to_csv(index=False, encoding="utf-8-sig")
-            st.download_button("Baixar Mailchimp CSV", data=csv_mc.encode("utf-8-sig"),
-                               file_name=f"mailchimp_{tipo_camp[:20].replace(' ','_')}.csv",
-                               mime="text/csv", width="stretch")
-            st.caption(f"{df_mc['Email Address'].notna().sum()} com email · {len(df_mc.columns)} colunas")
+            st.download_button(
+                "Baixar Mailchimp CSV",
+                data=csv_mc.encode("utf-8-sig"),
+                file_name=f"mailchimp_{tipo_camp[:20].replace(' ','_')}.csv",
+                mime="text/csv",
+                width="stretch",
+                key="mb_download_mailchimp",
+            )
+            st.caption(f"{df_mc['Email Address'].notna().sum()} com email · layout enxuto")
             st.markdown('</div>', unsafe_allow_html=True)
 
         with col_3c:
@@ -3149,47 +3512,36 @@ elif page == "Mailing Builder":
                 "TELEFONE": df_mail["telefone"],
                 "PRIMEIRO_NOME": df_mail["primeiro_nome"],
                 "NOME_COMPLETO": df_mail["nm_contato"],
-            })
-            for col in df_mail.columns:
-                if col not in _cols_tecnicas and col not in df_3c.columns:
-                    df_3c[col.upper()] = df_mail[col]
-            csv_3c = df_3c.to_csv(index=False, sep=";", encoding="utf-8-sig")
-            st.download_button("Baixar 3CPlus CSV", data=csv_3c.encode("utf-8-sig"),
-                               file_name=f"3cplus_{tipo_camp[:20].replace(' ','_')}.csv",
-                               mime="text/csv", width="stretch")
-            st.caption(f"{(df_3c['TELEFONE'].str.len() >= 10).sum()} com tel · {len(df_3c.columns)} colunas")
-            st.markdown('</div>', unsafe_allow_html=True)
-
-        with col_sms:
-            st.markdown('<div class="export-card"><div class="export-title">SMS Teste</div>', unsafe_allow_html=True)
-            df_sms = pd.DataFrame({
-                "TELEFONE": df_mail["telefone"],
-                "NOME": df_mail["primeiro_nome"],
                 "EMPRESA": df_mail["nm_cliente"],
+                "CNPJ": df_mail["cnpj"],
             })
-            # limitar a 50 para SMS teste
-            df_sms_test = df_sms[df_sms["TELEFONE"].str.len() >= 10].head(50)
-            csv_sms = df_sms_test.to_csv(index=False, sep=";", encoding="utf-8-sig")
-            st.download_button("Baixar SMS Teste (50)", data=csv_sms.encode("utf-8-sig"),
-                               file_name=f"sms_teste_{tipo_camp[:15].replace(' ','_')}.csv",
-                               mime="text/csv", width="stretch")
-            abord_sms = ABORDAGENS.get(tipo_camp, {}).get("sms","")
-            if abord_sms:
-                st.caption("Template sugerido:")
-                st.code(abord_sms[:80]+"...", language="text")
-            else:
-                st.caption(f"{len(df_sms_test)} numeros validos para disparo teste")
+            csv_3c = df_3c.to_csv(index=False, sep=";", encoding="utf-8-sig")
+            st.download_button(
+                "Baixar 3CPlus CSV",
+                data=csv_3c.encode("utf-8-sig"),
+                file_name=f"3cplus_{tipo_camp[:20].replace(' ','_')}.csv",
+                mime="text/csv",
+                width="stretch",
+                key="mb_download_3cplus",
+            )
+            st.caption(f"{(df_3c['TELEFONE'].str.len() >= 10).sum()} com telefone válido")
             st.markdown('</div>', unsafe_allow_html=True)
 
-        with col_csv:
+        with col_full:
             st.markdown('<div class="export-card"><div class="export-title">Mapa Parque Completo</div>', unsafe_allow_html=True)
-            st.caption("Todas as colunas do mapa parque + campos calculados.")
-            df_custom = df_mail.copy()
-            csv_custom = df_custom.to_csv(index=False, sep=";", encoding="utf-8-sig")
-            st.download_button("Baixar CSV completo", data=csv_custom.encode("utf-8-sig"),
-                               file_name=f"mailing_{tipo_camp[:20].replace(' ','_')}.csv",
-                               mime="text/csv", width="stretch")
-            st.caption(f"{len(df_custom)} registros · {len(df_custom.columns)} colunas")
+            st.caption("Todas as colunas reais do mapa parque, na ordem do banco.")
+            cols_full_map = [c for c in map_cols_disponiveis if c in df_mail.columns]
+            df_full_map = df_mail[cols_full_map].copy() if cols_full_map else df_mail.copy()
+            csv_full = df_full_map.to_csv(index=False, sep=";", encoding="utf-8-sig")
+            st.download_button(
+                "Baixar mapa completo",
+                data=csv_full.encode("utf-8-sig"),
+                file_name=f"mapa_parque_{tipo_camp[:20].replace(' ','_')}.csv",
+                mime="text/csv",
+                width="stretch",
+                key="mb_download_full_map",
+            )
+            st.caption(f"{len(df_full_map)} registros · {len(df_full_map.columns)} colunas do mapa")
             st.markdown('</div>', unsafe_allow_html=True)
 
     elif gerar:
