@@ -1,6 +1,5 @@
 """
 Hub de Carteira — Mirai Telecom · v3
-MERGE SQL SAFE: preserva front v11/Metas e adiciona consultas parametrizadas
 Design premium: dark enterprise roxo, parallax de bolinhas com zonas vazias,
 carrossel horizontal nativo, metric cards com delta direcional (estilo GeoCS360),
 health bars, insight cards automáticos, comparativos temporais semana/mês.
@@ -617,18 +616,10 @@ def get_conn():
 
 @st.cache_data(ttl=300)
 def query(sql: str) -> pd.DataFrame:
-    """Executa SQL estático, sem parâmetros dinâmicos vindos da interface."""
     return get_conn().execute(sql).df()
 
 @st.cache_data(ttl=300)
 def query_params(sql: str, params: tuple = ()) -> pd.DataFrame:
-    """
-    Executa SQL parametrizado no DuckDB/MotherDuck.
-
-    Use esta função sempre que a consulta receber valores vindos de widgets,
-    pesquisas ou dimensões selecionadas pelo usuário. Isso evita quebra do SQL
-    por aspas, caracteres especiais e valores sujos como byte nulo (\0).
-    """
     return get_conn().execute(sql, list(params)).df()
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -657,51 +648,31 @@ def safe_int(n, default=0):
     except Exception:
         return default
 
-
 def clean_text_value(value) -> str:
-    """Normaliza texto vindo do banco/interface e remove bytes nulos."""
     if value is None:
         return ""
-    return (
-        str(value)
-        .replace("\x00", "")
-        .replace("\\0", "")
-        .strip()
-    )
-
+    return str(value).replace("\x00", "").replace("\0", "").strip()
 
 def clean_dimension_dataframe(df: pd.DataFrame, column: str) -> pd.DataFrame:
-    """Limpa dimensões usadas em filtros e remove valores inválidos/duplicados."""
     if df.empty or column not in df.columns:
         return df
-
     out = df.copy()
     out[column] = (
         out[column]
         .fillna("")
         .astype(str)
         .str.replace("\x00", "", regex=False)
-        .str.replace("\\0", "", regex=False)
+        .str.replace("\0", "", regex=False)
         .str.strip()
     )
-
-    invalid_values = {"", "\\0", "\x00", "nan", "None", "NULL"}
-    out = out[~out[column].isin(invalid_values)]
-
-    return (
-        out
-        .drop_duplicates(subset=[column])
-        .sort_values(column)
-        .reset_index(drop=True)
-    )
-
+    invalid = {"", "\0", "\x00", "nan", "None", "NULL"}
+    out = out[~out[column].isin(invalid)]
+    return out.drop_duplicates(subset=[column]).sort_values(column).reset_index(drop=True)
 
 def build_in_clause(column_sql: str, values: list):
-    """Cria cláusula IN parametrizada e devolve (sql, params)."""
     clean_values = [clean_text_value(v) for v in values if clean_text_value(v)]
     if not clean_values:
         return "", tuple()
-
     placeholders = ", ".join(["?"] * len(clean_values))
     return f"{column_sql} IN ({placeholders})", tuple(clean_values)
 
@@ -1746,18 +1717,14 @@ elif page == "Jornada por M":
         st.plotly_chart(style_fig(fig2, h=360), use_container_width=True)
 
     m_sel = st.slider("Detalhe por M especifico", 1, 40, 16)
-    df_md = query_params(
-        """
+    df_md = query_params("""
         SELECT l.cnpj, c.nm_cliente, c.vertical, c.nm_contato, c.celular, l.nr_telefone,
                l.plano, l.m, l.semaforo, ROUND(l.fat_medio,2) AS fat_medio, l.fidelizado
-        FROM main.fato_linha_movel l
-        JOIN main.dim_cliente_hub c ON l.cnpj=c.cnpj
+        FROM main.fato_linha_movel l JOIN main.dim_cliente_hub c ON l.cnpj=c.cnpj
         WHERE l.m=? AND l.flg_ativa='SIM'
           AND l.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
         ORDER BY l.fat_medio DESC LIMIT 200
-        """,
-        (int(m_sel),),
-    )
+    """, (int(m_sel),))
     if not df_md.empty:
         st.caption(f"{len(df_md)} linhas no M{m_sel}")
         st.dataframe(df_md[["nm_cliente","vertical","nr_telefone","plano","semaforo","fidelizado","fat_medio","nm_contato","celular"]],
@@ -1770,34 +1737,21 @@ elif page == "Jornada por M":
 elif page == "Por Vertical":
     page_header("Carteira por vertical", "Segmentacao completa por setor e atividade economica")
 
-    df_verts = query("""
-        SELECT DISTINCT COALESCE(vertical,'Nao informado') AS v
-        FROM main.dim_cliente_hub
-        WHERE situacao_receita='2 - ATIVA'
-        ORDER BY 1
-    """)
+    df_verts = query("SELECT DISTINCT COALESCE(vertical,'Nao informado') AS v FROM main.dim_cliente_hub WHERE situacao_receita='2 - ATIVA' ORDER BY 1")
     df_verts = clean_dimension_dataframe(df_verts, "v")
     vs = st.selectbox("Vertical", ["Todas"] + df_verts["v"].tolist())
 
     sql_seg = """
-        SELECT COALESCE(c.vertical,'Nao informado') AS vertical,
-               COALESCE(c.atividade_economica,'—') AS atividade,
-               COUNT(DISTINCT c.cnpj) AS clientes,
-               SUM(COALESCE(c.qt_movel,0)) AS linhas_movel,
-               SUM(COALESCE(c.qt_banda_larga,0)) AS bl,
-               SUM(COALESCE(c.qt_office_365,0)) AS office,
-               COUNT(DISTINCT CASE
-                   WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)=0
-                   THEN c.cnpj END
-               ) AS sem_car
-        FROM main.dim_cliente_hub c
-        WHERE c.situacao_receita='2 - ATIVA'
+        SELECT COALESCE(c.vertical,'Nao informado') AS vertical, COALESCE(c.atividade_economica,'—') AS atividade,
+               COUNT(DISTINCT c.cnpj) AS clientes, SUM(COALESCE(c.qt_movel,0)) AS linhas_movel,
+               SUM(COALESCE(c.qt_banda_larga,0)) AS bl, SUM(COALESCE(c.qt_office_365,0)) AS office,
+               COUNT(DISTINCT CASE WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)=0 THEN c.cnpj END) AS sem_car
+        FROM main.dim_cliente_hub c WHERE c.situacao_receita='2 - ATIVA'
     """
     params_seg = []
     if vs != "Todas":
         sql_seg += " AND COALESCE(c.vertical,'Nao informado') = ?"
         params_seg.append(clean_text_value(vs))
-
     sql_seg += " GROUP BY 1,2 ORDER BY linhas_movel DESC"
     df_seg = query_params(sql_seg, tuple(params_seg))
 
@@ -1814,23 +1768,14 @@ elif page == "Por Vertical":
     with col_r:
         if vs != "Todas":
             sec_head(vs)
-            df_cli = query_params(
-                """
-                SELECT c.nm_cliente, c.nm_contato, c.celular, c.cidade,
-                       COALESCE(c.qt_movel,0) AS linhas,
-                       COALESCE(c.qt_banda_larga,0) AS bl,
-                       c.primeira_oferta,
-                       CASE
-                           WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)>0
-                           THEN 'CAR' ELSE 'OK'
-                       END AS car
+            df_cli = query_params("""
+                SELECT c.nm_cliente, c.nm_contato, c.celular, c.cidade, COALESCE(c.qt_movel,0) AS linhas,
+                       COALESCE(c.qt_banda_larga,0) AS bl, c.primeira_oferta,
+                       CASE WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)>0 THEN 'CAR' ELSE 'OK' END AS car
                 FROM main.dim_cliente_hub c
-                WHERE COALESCE(c.vertical,'Nao informado') = ?
-                  AND c.situacao_receita='2 - ATIVA'
+                WHERE COALESCE(c.vertical,'Nao informado')=? AND c.situacao_receita='2 - ATIVA'
                 ORDER BY linhas DESC LIMIT 50
-                """,
-                (clean_text_value(vs),),
-            )
+            """, (clean_text_value(vs),))
             for _, r in df_cli.iterrows():
                 cor = "#f87171" if r["car"]=="CAR" else "#34d399"
                 bl_b = "<span style='background:rgba(56,189,248,.1);color:#38bdf8;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:99px;'>BL</span> " if r["bl"]>0 else ""
@@ -1848,17 +1793,12 @@ elif page == "Por Vertical":
                 )
                 st.markdown(html, unsafe_allow_html=True)
         else:
-            df_top = df_seg.groupby("vertical").agg(
-                clientes=("clientes","sum"),
-                linhas=("linhas_movel","sum"),
-            ).reset_index().sort_values("linhas",ascending=False).head(12)
-            fig = px.bar(
-                df_top, x="linhas", y="vertical", orientation="h", color="clientes",
-                color_continuous_scale=["#1a1235","#7c3aed"], text="linhas",
-                labels={"linhas":"Linhas","vertical":""},
-            )
+            df_top = df_seg.groupby("vertical").agg(clientes=("clientes","sum"),linhas=("linhas_movel","sum")).reset_index().sort_values("linhas",ascending=False).head(12)
+            fig = px.bar(df_top, x="linhas", y="vertical", orientation="h", color="clientes",
+                         color_continuous_scale=["#1a1235","#7c3aed"], text="linhas", labels={"linhas":"Linhas","vertical":""})
             fig.update_layout(coloraxis_showscale=False)
             st.plotly_chart(style_fig(fig, h=460), use_container_width=True)
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ALERTAS DA SEMANA
@@ -1882,30 +1822,25 @@ elif page == "Alertas da Semana":
             st.markdown(metric_card(r["tipo_alerta"], fmt_num(r["q"]),
                                     sub=TIPS_AL.get(r["tipo_alerta"],""), color_cls=cc), unsafe_allow_html=True)
             if st.button("Abrir mailing", key=f"al_btn_{i}", use_container_width=True):
-                st.session_state["mb_tipo"] = r["tipo_alerta"]
-                st.session_state["mailing_df"] = None
-                request_page("Mailing Builder")
-                st.rerun()
+                st.session_state["mb_tipo"] = r["tipo_alerta"]; st.session_state["mailing_df"] = None
+                request_page("Mailing Builder"); st.rerun()
 
     tipo_sel = st.selectbox("Filtrar", ["Todos"] + df_al["tipo_alerta"].tolist())
-    sql_alertas = """
-        SELECT tipo_alerta, nm_cliente, vertical, nm_contato, celular, email,
-               nr_telefone, plano, m, semaforo, ROUND(fat_medio,2) AS fat_medio,
-               primeira_oferta
-        FROM main.vw_alertas_semana
-    """
+    sql_alertas = """SELECT tipo_alerta, nm_cliente, vertical, nm_contato, celular, email,
+               nr_telefone, plano, m, semaforo, ROUND(fat_medio,2) AS fat_medio, primeira_oferta
+        FROM main.vw_alertas_semana"""
     alert_params = []
     if tipo_sel != "Todos":
         sql_alertas += " WHERE tipo_alerta = ?"
         alert_params.append(clean_text_value(tipo_sel))
     sql_alertas += " ORDER BY m DESC LIMIT 500"
-
     df_det = query_params(sql_alertas, tuple(alert_params))
     if not df_det.empty:
         st.caption(f"{len(df_det)} registros")
         st.dataframe(df_det, use_container_width=True, hide_index=True)
         csv = df_det.to_csv(index=False, sep=";", encoding="utf-8-sig")
         st.download_button("Exportar CSV", csv.encode("utf-8-sig"), "alertas.csv", mime="text/csv")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # OPORTUNIDADES
@@ -1924,31 +1859,23 @@ elif page == "Oportunidades":
                         f'<div class="mc-value">{fmt_num(r["clientes"])}</div>'
                         f'<div class="mc-sub">{fmt_num(r["linhas"])} linhas</div></div>', unsafe_allow_html=True)
             if st.button("Mailing", key=f"op_btn_{i}", use_container_width=True):
-                st.session_state["mb_tipo"] = r["oportunidade_principal"]
-                st.session_state["mailing_df"] = None
-                request_page("Mailing Builder")
-                st.rerun()
+                st.session_state["mb_tipo"] = r["oportunidade_principal"]; st.session_state["mailing_df"] = None
+                request_page("Mailing Builder"); st.rerun()
 
     op_sel = st.selectbox("Filtrar", ["Todas"] + df_op["oportunidade_principal"].tolist())
-    sql_oportunidades = """
-        SELECT cnpj, nm_cliente, vertical, nm_contato, celular, email, cidade,
-               qt_movel, qt_linhas AS linhas_ativas, ROUND(m_medio,1) AS m_medio,
-               ROUND(fat_total,2) AS fat_total, digital_1, primeira_oferta,
-               oportunidade_principal
-        FROM main.vw_oportunidades_comerciais
-    """
+    sql_oportunidades = "SELECT cnpj, nm_cliente, vertical, nm_contato, celular, email, cidade, qt_movel, qt_linhas AS linhas_ativas, ROUND(m_medio,1) AS m_medio, ROUND(fat_total,2) AS fat_total, digital_1, primeira_oferta, oportunidade_principal FROM main.vw_oportunidades_comerciais"
     op_params = []
     if op_sel != "Todas":
         sql_oportunidades += " WHERE oportunidade_principal = ?"
         op_params.append(clean_text_value(op_sel))
     sql_oportunidades += " ORDER BY qt_movel DESC LIMIT 500"
-
     df_det_op = query_params(sql_oportunidades, tuple(op_params))
     if not df_det_op.empty:
         st.caption(f"{len(df_det_op)} clientes")
         st.dataframe(df_det_op, use_container_width=True, hide_index=True)
         csv = df_det_op.to_csv(index=False, sep=";", encoding="utf-8-sig")
         st.download_button("Exportar CSV", csv.encode("utf-8-sig"), "oportunidades.csv", mime="text/csv")
+
 
 # ══════════════════════════════════════════════════════════════════════════════
 # BUSCA POR CLIENTE
@@ -1964,15 +1891,13 @@ elif page == "Busca por Cliente":
 
     if busca or pesquisar:
         termo = clean_text_value(busca.strip().replace(".","").replace("/","").replace("-",""))
-        if termo.isdigit() and len(termo) >= 8:
+        if termo.isdigit() and len(termo)>=8:
             where = "c.cnpj LIKE ?"
             busca_param = f"%{termo}%"
         else:
             where = "UPPER(c.nm_cliente) LIKE ?"
             busca_param = f"%{termo.upper()}%"
-
-        df_res = query_params(
-            f"""
+        df_res = query_params(f"""
             SELECT c.cnpj, c.nm_cliente, c.vertical, c.atividade_economica, c.nm_contato,
                    c.celular, c.email, c.cidade, c.situacao_receita,
                    COALESCE(c.qt_movel,0) AS qt_movel, COALESCE(c.qt_banda_larga,0) AS qt_bl,
@@ -1981,13 +1906,8 @@ elif page == "Busca por Cliente":
                    COALESCE(c.vl_car_movel,0) AS car_movel, COALESCE(c.vl_car_fixa,0) AS car_fixa,
                    c.flg_biometrado, c.primeira_oferta, c.segunda_oferta, c.terceira_oferta,
                    c.digital_1, c.digital_2, c.digital_3, c.rec_aparelhos, c.propensao_avancada
-            FROM main.dim_cliente_hub c
-            WHERE {where}
-            ORDER BY c.qt_movel DESC
-            LIMIT 20
-            """,
-            (busca_param,),
-        )
+            FROM main.dim_cliente_hub c WHERE {where} ORDER BY c.qt_movel DESC LIMIT 20
+        """, (busca_param,))
         if df_res.empty:
             st.markdown("<div class='empty'><div class='empty-text'>Nenhum cliente encontrado.</div></div>", unsafe_allow_html=True)
         else:
@@ -1998,22 +1918,14 @@ elif page == "Busca por Cliente":
                 cli = df_res.iloc[0]
 
             cnpj_cli = clean_text_value(cli["cnpj"])
-            df_linhas = query_params(
-                """
+            df_linhas = query_params("""
                 SELECT nr_telefone, plano, m, semaforo, fidelizado, aparelho_modelo,
-                       ROUND(fat_medio,2) AS fat_medio, flg_m16_urgente,
-                       flg_elegivel_comercial, situacao_receita
+                       ROUND(fat_medio,2) AS fat_medio, flg_m16_urgente, flg_elegivel_comercial, situacao_receita
                 FROM main.fato_linha_movel
-                WHERE cnpj = ?
-                  AND dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
+                WHERE cnpj=? AND dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
                 ORDER BY m DESC
-                """,
-                (cnpj_cli,),
-            )
-            df_qsc_cli = query_params(
-                "SELECT * FROM main.dim_qsc_cliente WHERE cnpj = ?",
-                (cnpj_cli,),
-            )
+            """, (cnpj_cli,))
+            df_qsc_cli = query_params("SELECT * FROM main.dim_qsc_cliente WHERE cnpj=?", (cnpj_cli,))
 
             tem_car = cli["car_movel"]+cli["car_fixa"] > 0
             bio = cli["flg_biometrado"] == "1"
@@ -2273,25 +2185,25 @@ elif page == "Mailing Builder":
 
             limite = st.number_input("Limite de registros", 10, 5000, 500, step=50, key="mb_lim")
 
-    # ── Montar WHERE com parâmetros ──────────────────────────────────────────
+    # ── Montar WHERE ─────────────────────────────────────────────────────────
     wheres = ["c.situacao_receita != 'NENHUMA'"]
     sql_params = []
 
     if situacao != "Todos":
-        wheres.append("c.situacao_receita = ?")
+        wheres.append("c.situacao_receita=?")
         sql_params.append(clean_text_value(situacao))
     else:
         wheres.append("c.situacao_receita='2 - ATIVA'")
 
     if semaforo != "Todos":
-        wheres.append("la.semaforo_predominante = ?")
+        wheres.append("la.semaforo_predominante=?")
         sql_params.append(clean_text_value(semaforo))
 
     if verts_mb:
-        clause, params = build_in_clause("COALESCE(c.vertical,'Nao informado')", verts_mb)
-        if clause:
-            wheres.append(clause)
-            sql_params.extend(params)
+        in_clause, in_params = build_in_clause("COALESCE(c.vertical,'Nao informado')", verts_mb)
+        if in_clause:
+            wheres.append(in_clause)
+            sql_params.extend(in_params)
 
     wheres.append("COALESCE(c.qt_movel,0) BETWEEN ? AND ?")
     sql_params.extend([int(min_linhas), int(max_linhas)])
@@ -2301,9 +2213,7 @@ elif page == "Mailing Builder":
         sql_params.extend([int(min_m), int(max_m)])
 
     if min_cred > 0 or max_cred < 50000:
-        wheres.append(
-            "COALESCE(TRY_CAST(REGEXP_EXTRACT(c.rec_aparelhos,'capacidade de pagamento de R\\$([0-9]+)',1) AS DOUBLE),-1) BETWEEN ? AND ?"
-        )
+        wheres.append("COALESCE(TRY_CAST(REGEXP_EXTRACT(c.rec_aparelhos,'capacidade de pagamento de R\\$([0-9]+)',1) AS DOUBLE),-1) BETWEEN ? AND ?")
         sql_params.extend([int(min_cred), int(max_cred)])
 
     if car_flt == "Sem CAR (apenas)":
@@ -2332,16 +2242,17 @@ elif page == "Mailing Builder":
         if dig_conditions:
             wheres.append("(" + " OR ".join(dig_conditions) + ")")
 
-    # WHERE da campanha especifica: apenas fragmentos estáticos do dicionário TIPOS_CAMP.
-    where_camp = cfg.get("where_extra", "").strip()
+    # WHERE da campanha especifica
+    where_camp = cfg.get("where_extra","")
     if where_camp:
+        where_camp = where_camp.strip()
         if where_camp.upper().startswith("AND "):
             where_camp = where_camp[4:].strip()
         wheres.append(where_camp)
 
-    where_sql = " AND ".join(f"({condition})" for condition in wheres)
-    join_op = cfg.get("join_op", "")
-    order_by = cfg.get("order_by", "c.qt_movel DESC")
+    where_sql = " AND ".join(wheres)
+    join_op   = cfg.get("join_op","")
+    order_by  = cfg.get("order_by","c.qt_movel DESC")
 
     # ── Gerar mailing ─────────────────────────────────────────────────────────
     col_g, col_r2 = st.columns([1,3])
@@ -2391,12 +2302,10 @@ elif page == "Mailing Builder":
         {join_op}
         WHERE {where_sql}
         QUALIFY ROW_NUMBER() OVER (PARTITION BY c.cnpj ORDER BY l.fat_medio DESC) = 1
-        ORDER BY {order_by}
-        LIMIT ?
+        ORDER BY {order_by} LIMIT ?
         """
         try:
-            mailing_params = tuple(sql_params) + (int(limite),)
-            df_mail = query_params(sql, mailing_params)
+            df_mail = query_params(sql, tuple(sql_params) + (int(limite),))
             st.session_state["mailing_df"] = df_mail
         except Exception as e:
             st.error(f"Erro: {e}")
