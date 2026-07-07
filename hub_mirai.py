@@ -2336,7 +2336,8 @@ elif page == "Metas e Certificacao":
                 </div>
             </div>
             """
-            st.markdown(html, unsafe_allow_html=True)
+            html_render = " ".join(line.strip() for line in html.splitlines() if line.strip())
+            st.markdown(html_render, unsafe_allow_html=True)
 
         # ── Evolução histórica ────────────────────────────────────────────────
         if df_hist["ano_mes"].nunique() > 1:
