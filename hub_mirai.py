@@ -1701,21 +1701,6 @@ def generate_insights_carteira(df_kpi_linhas, df_saude):
     return out[:5]
 
 if page == "Visao Geral — Linhas":
-    # hero
-    st.markdown("""
-    <div class="hero">
-      <div class="hero-kicker"><span class="dot"></span>Mirai Telecom &middot; Vivo B2B Consultivo</div>
-      <div class="hero-title">
-        Sua carteira<br>
-        <span class="accent">mais perto</span><br>
-        da próxima ação.
-      </div>
-      <div class="hero-sub">
-        Uma central de leitura comercial para transformar linhas, CNPJs, QSC, alertas e oportunidades em decisões simples, rápidas e priorizadas.
-      </div>
-    </div>
-    """, unsafe_allow_html=True)
-
     df_snap = query("""
         SELECT COUNT(*) AS total, COUNT(CASE WHEN flg_ativa='SIM' THEN 1 END) AS ativas,
                COUNT(CASE WHEN flg_m16_urgente='SIM' THEN 1 END) AS m16,
