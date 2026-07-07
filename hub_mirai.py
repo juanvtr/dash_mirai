@@ -1,8 +1,7 @@
 """
-Hub de Carteira — Mirai Telecom · v3
-Design premium: dark enterprise roxo, parallax de bolinhas com zonas vazias,
-carrossel horizontal nativo, metric cards com delta direcional (estilo GeoCS360),
-health bars, insight cards automáticos, comparativos temporais semana/mês.
+Hub de Carteira — Mirai Telecom · v10
+Design editorial moderno: topbar real com popover claro, hero executivo,
+scroll reveal, cards de insight e gráficos corrigidos para Streamlit Cloud.
 """
 from __future__ import annotations
 import duckdb
@@ -23,43 +22,39 @@ CSS = """
 @import url('https://fonts.googleapis.com/css2?family=Inter:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;0,900;1,400&family=Inter+Tight:wght@500;700;800;900&display=swap');
 
 :root {
-    /* paleta escura Mirai */
-    --bg:       #06030f;
-    --bg2:      #0d0820;
-    --card:     #120d25;
-    --card2:    #1a1235;
-    --card3:    #211848;
-    --border:   rgba(140,90,255,0.13);
-    --border2:  rgba(140,90,255,0.07);
+    --bg:       #f2f0f6;
+    --bg2:      #fcfbfd;
+    --card:     #ffffff;
+    --card2:    #f8f6fb;
+    --card3:    #ece7f4;
+    --border:   rgba(106,86,153,0.16);
+    --border2:  rgba(106,86,153,0.08);
 
-    --ink:      #f1eeff;
-    --muted:    #8b7eaa;
-    --dim:      #4d4368;
+    --ink:      #251d35;
+    --muted:    #625a72;
+    --dim:      #8b8598;
 
-    --purple:   #7c3aed;
-    --purple2:  #9061f9;
-    --purple3:  #a78bfa;
-    --purple4:  #c4b5fd;
-    --lilac:    #ede9fe;
-    --pink:     #c026d3;
-    --fuchsia:  #e879f9;
+    --purple:   #6957b8;
+    --purple2:  #7763c6;
+    --purple3:  #8974d6;
+    --purple4:  #a896db;
+    --lilac:    #ece6f8;
+    --pink:     #9f54c1;
+    --fuchsia:  #c589da;
 
     --green:    #10b981;
     --amber:    #f59e0b;
     --red:      #ef4444;
-    --sky:      #38bdf8;
-
-    --glow-p:   rgba(124,58,237,0.28);
-    --glow-pk:  rgba(192,38,211,0.18);
+    --sky:      #0284c7;
 
     --radius:   16px;
     --radius-sm:10px;
     --radius-lg:22px;
     --radius-pill:999px;
 
-    --shadow:   0 8px 32px rgba(2,1,10,0.6), 0 0 0 1px var(--border);
-    --shadow-lg:0 20px 56px rgba(2,1,10,0.7), 0 0 0 1px var(--border);
-    --glow:     0 0 40px var(--glow-p);
+    --shadow:   0 10px 26px rgba(37,29,53,0.08), 0 0 0 1px var(--border);
+    --shadow-lg:0 18px 38px rgba(37,29,53,0.11), 0 0 0 1px rgba(106,86,153,0.18);
+    --glow:     0 12px 30px rgba(105,87,184,0.10);
 }
 
 *, *::before, *::after {
@@ -67,10 +62,20 @@ CSS = """
     font-family: 'Inter', -apple-system, sans-serif !important;
 }
 
-html, body { background: var(--bg) !important; }
-.stApp { background: var(--bg) !important; }
-[data-testid="stAppViewContainer"] { background: var(--bg) !important; }
-[data-testid="stHeader"], #MainMenu, footer { display: none !important; visibility: hidden !important; }
+html, body { background: var(--bg) !important; color: var(--ink) !important; }
+.stApp { background: var(--bg) !important; color: var(--ink) !important; }
+
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(circle at 8% 6%, rgba(105,87,184,0.10), transparent 26%),
+        radial-gradient(circle at 92% 7%, rgba(159,84,193,0.05), transparent 22%),
+        linear-gradient(180deg, #f8f7fb 0%, #f3f0f7 46%, #fcfbfd 100%) !important;
+}
+
+[data-testid="stHeader"], #MainMenu, footer {
+    display: none !important;
+    visibility: hidden !important;
+}
 [data-testid="stSidebar"] { display: none !important; }
 [data-testid="stDecoration"] { display: none !important; }
 
@@ -79,376 +84,1067 @@ html, body { background: var(--bg) !important; }
     padding: 0 1.5rem 4rem !important;
 }
 
+/* Fundo animado antigo fica desligado para reduzir ruído visual */
+#mirai-canvas { display: none !important; }
+
 /* ── scrollbar ── */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: var(--bg2); }
-::-webkit-scrollbar-thumb { background: var(--card3); border-radius: 4px; }
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: #efebf5; }
+::-webkit-scrollbar-thumb { background: #b9accf; border-radius: 6px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--purple); }
 
-/* ── parallax canvas ── */
-#mirai-canvas {
-    position: fixed; inset: 0; z-index: 0;
-    pointer-events: none;
-}
-section.main > div.block-container { position: relative; z-index: 1; }
-
-/* ── nav sticky ── */
+/* ── nav sticky clara ── */
 .nav-wrap {
-    position: sticky; top: 0; z-index: 100;
-    background: rgba(6,3,15,0.82);
-    backdrop-filter: blur(18px) saturate(160%);
-    -webkit-backdrop-filter: blur(18px) saturate(160%);
-    border-bottom: 1px solid var(--border);
-    padding: 12px 0 10px;
-    margin-bottom: 0;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: rgba(250,249,252,0.88);
+    backdrop-filter: blur(18px) saturate(150%);
+    -webkit-backdrop-filter: blur(18px) saturate(150%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 10px 12px;
+    margin: 12px 0 18px;
+    box-shadow: var(--shadow);
 }
 
 [data-testid="stRadio"] > label { display: none !important; }
+
 [data-testid="stRadio"] div[role="radiogroup"] {
-    display: flex !important; flex-wrap: wrap !important;
-    gap: 6px !important; justify-content: center !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+    justify-content: center !important;
     background: transparent !important;
 }
+
 [data-testid="stRadio"] label {
-    background: var(--card) !important;
-    border: 1px solid var(--border) !important;
+    background: #ffffff !important;
+    border: 1px solid rgba(124,58,237,0.14) !important;
     border-radius: var(--radius-pill) !important;
-    padding: 8px 18px !important;
+    padding: 8px 17px !important;
     transition: all .15s ease !important;
     cursor: pointer !important;
+    box-shadow: 0 3px 10px rgba(31,20,49,0.04) !important;
 }
+
 [data-testid="stRadio"] label:hover {
-    background: var(--card2) !important;
-    border-color: rgba(140,90,255,0.35) !important;
+    background: #f1edf7 !important;
+    border-color: rgba(124,58,237,0.32) !important;
+    transform: translateY(-1px);
 }
+
 [data-testid="stRadio"] label p,
 [data-testid="stRadio"] label span,
 [data-testid="stRadio"] label div {
-    color: var(--muted) !important;
-    font-size: .82rem !important; font-weight: 700 !important;
-    letter-spacing: .02em !important;
+    color: #352d46 !important;
+    font-size: .82rem !important;
+    font-weight: 800 !important;
+    letter-spacing: .01em !important;
 }
+
 [data-testid="stRadio"] label:has(input:checked) {
-    background: linear-gradient(135deg, var(--purple), var(--pink)) !important;
+    background: linear-gradient(135deg, var(--purple), var(--purple2)) !important;
     border-color: transparent !important;
-    box-shadow: 0 4px 18px var(--glow-p) !important;
+    box-shadow: 0 8px 18px rgba(105,87,184,0.16) !important;
 }
+
 [data-testid="stRadio"] label:has(input:checked) p,
 [data-testid="stRadio"] label:has(input:checked) span,
-[data-testid="stRadio"] label:has(input:checked) div { color: #fff !important; }
-[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child,
-[data-testid="stRadio"] input[type="radio"] { display: none !important; }
+[data-testid="stRadio"] label:has(input:checked) div {
+    color: #fff !important;
+}
 
-/* ── hero ── */
+[data-testid="stRadio"] div[data-baseweb="radio"] > div:first-child,
+[data-testid="stRadio"] input[type="radio"] {
+    display: none !important;
+}
+
+/* ── hero limpo ── */
 .hero {
-    min-height: 72vh;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    text-align: center; padding: 80px 20px 60px;
+    min-height: 380px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+
+    text-align: center;
+    padding: 56px 24px 50px;
+    margin: 16px 0 12px;
     position: relative;
+    overflow: hidden;
+
+    background:
+        radial-gradient(circle at 20% 0%, rgba(124,58,237,0.16), transparent 30%),
+        radial-gradient(circle at 86% 10%, rgba(192,38,211,0.10), transparent 24%),
+        linear-gradient(180deg, #ffffff 0%, #fbf9ff 100%);
+    border: 1px solid var(--border);
+    border-radius: 28px;
+    box-shadow: var(--shadow-lg);
 }
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image:
+        linear-gradient(rgba(124,58,237,0.045) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(124,58,237,0.045) 1px, transparent 1px);
+    background-size: 42px 42px;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,.55), transparent 78%);
+    pointer-events: none;
+}
+
 .hero-kicker {
-    display: inline-flex; align-items: center; gap: 8px;
-    background: rgba(124,58,237,.12);
-    border: 1px solid rgba(124,58,237,.28);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #efebf5;
+    border: 1px solid rgba(124,58,237,0.18);
     border-radius: var(--radius-pill);
-    padding: 6px 16px; margin-bottom: 32px;
-    font-size: .7rem; font-weight: 800;
-    letter-spacing: .12em; text-transform: uppercase; color: var(--purple3);
+    padding: 7px 16px;
+    margin-bottom: 26px;
+    font-size: .72rem;
+    font-weight: 900;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--purple);
+    position: relative;
+    z-index: 2;
 }
+
 .hero-kicker .dot {
-    width: 5px; height: 5px; border-radius: 50%;
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
     background: var(--green);
-    box-shadow: 0 0 8px var(--green);
-    animation: pulse 2s infinite;
+    box-shadow: 0 0 0 5px rgba(16,185,129,0.12);
 }
-@keyframes pulse {
-    0%,100% { opacity:1; } 50% { opacity:.4; }
-}
+
 .hero-title {
     font-family: 'Inter Tight', 'Inter', sans-serif;
-    font-size: clamp(3rem, 7vw, 5.5rem);
-    font-weight: 900; letter-spacing: -0.05em; line-height: 1;
-    margin: 0 0 24px; color: var(--ink);
+    font-size: clamp(2.3rem, 5vw, 4.6rem);
+    font-weight: 900;
+    letter-spacing: -0.055em;
+    line-height: 1;
+    margin: 0 0 20px;
+    color: var(--ink);
+    position: relative;
+    z-index: 2;
 }
+
 .hero-title .accent {
-    background: linear-gradient(135deg, var(--purple3), var(--fuchsia));
-    -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.hero-title .outline {
+    background: linear-gradient(135deg, var(--purple), var(--pink));
+    -webkit-background-clip: text;
+    background-clip: text;
     color: transparent;
-    -webkit-text-stroke: 1.5px rgba(167,139,250,0.5);
 }
+
+.hero-title .outline {
+    color: #3a2a55;
+    -webkit-text-stroke: 0;
+}
+
 .hero-sub {
-    font-size: clamp(1rem, 2vw, 1.2rem);
-    color: var(--muted); max-width: 580px; line-height: 1.6;
-    margin: 0 auto 44px; font-weight: 400;
+    font-size: clamp(.96rem, 1.5vw, 1.1rem);
+    color: var(--muted);
+    max-width: 680px;
+    line-height: 1.6;
+    margin: 0 auto 34px;
+    font-weight: 500;
+    position: relative;
+    z-index: 2;
 }
+
 .hero-stats {
-    display: flex; gap: 40px; justify-content: center; flex-wrap: wrap;
-    padding-top: 32px; border-top: 1px solid var(--border2); margin-top: 8px;
+    display: flex;
+    gap: 28px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding-top: 24px;
+    border-top: 1px solid var(--border2);
+    margin-top: 4px;
+    position: relative;
+    z-index: 2;
 }
+
 .hero-stat-val {
     font-family: 'Inter Tight', 'Inter', sans-serif;
-    font-size: 2.2rem; font-weight: 900; letter-spacing: -.04em; color: var(--ink);
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: -.04em;
+    color: var(--ink);
 }
-.hero-stat-lbl { font-size: .68rem; color: var(--dim); font-weight: 700; text-transform: uppercase; letter-spacing: .1em; margin-top: 2px; }
 
-/* ── section ── */
-.sec-head {
-    margin: 56px 0 20px;
-    display: flex; align-items: baseline; gap: 12px;
+.hero-stat-lbl {
+    font-size: .68rem;
+    color: var(--dim);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    margin-top: 2px;
 }
+
+/* ── seções ── */
+.sec-head {
+    margin: 42px 0 16px;
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+
 .sec-title {
     font-family: 'Inter Tight', 'Inter', sans-serif;
-    font-size: 1.3rem; font-weight: 900; color: var(--ink); letter-spacing: -.03em;
-}
-.sec-sub { font-size: .78rem; color: var(--dim); font-weight: 500; }
-.sec-badge {
-    margin-left: auto;
-    background: var(--card2); border: 1px solid var(--border);
-    border-radius: var(--radius-pill); padding: 4px 12px;
-    font-size: .68rem; font-weight: 700; color: var(--muted); letter-spacing: .06em;
+    font-size: 1.22rem;
+    font-weight: 900;
+    color: var(--ink);
+    letter-spacing: -.03em;
 }
 
-/* ── metric card (estilo GeoCS360 adaptado) ── */
-.mc {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 20px 20px 16px;
-    position: relative; overflow: hidden; height: 100%;
-    transition: border-color .15s, box-shadow .15s;
+.sec-sub {
+    font-size: .78rem;
+    color: var(--muted);
+    font-weight: 600;
 }
-.mc:hover { border-color: rgba(140,90,255,.3); box-shadow: var(--glow); }
+
+.sec-badge {
+    margin-left: auto;
+    background: #efebf5;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-pill);
+    padding: 4px 12px;
+    font-size: .68rem;
+    font-weight: 800;
+    color: var(--purple);
+    letter-spacing: .06em;
+}
+
+/* ── metric card ── */
+.mc {
+    background:
+        radial-gradient(circle at 100% 0%, rgba(124,58,237,0.08), transparent 32%),
+        linear-gradient(180deg, #ffffff 0%, #fcfbff 100%);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px 20px 16px;
+    position: relative;
+    overflow: hidden;
+    height: 100%;
+    box-shadow: var(--shadow);
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+}
+
+.mc:hover {
+    border-color: rgba(124,58,237,.30);
+    box-shadow: var(--shadow-lg);
+    transform: translateY(-1px);
+}
+
 .mc::before {
-    content:''; position:absolute; top:0; left:0; right:0; height:2px;
+    content:'';
+    position:absolute;
+    top:0;
+    left:0;
+    right:0;
+    height:3px;
     border-radius: var(--radius) var(--radius) 0 0;
 }
+
 .mc.cp::before  { background: linear-gradient(90deg, var(--purple), var(--pink)); }
 .mc.cg::before  { background: var(--green); }
 .mc.cr::before  { background: var(--red); }
 .mc.ca::before  { background: var(--amber); }
 .mc.cs::before  { background: var(--sky); }
+
 .mc::after {
-    content:''; position:absolute; right:-30px; bottom:-30px;
-    width:100px; height:100px; border-radius:50%;
+    content:'';
+    position:absolute;
+    right:-30px;
+    bottom:-30px;
+    width:100px;
+    height:100px;
+    border-radius:50%;
     background: radial-gradient(circle, rgba(124,58,237,.08), transparent 70%);
     pointer-events:none;
 }
 
 .mc-label {
-    font-size: .64rem; font-weight: 700; text-transform: uppercase;
-    letter-spacing: .1em; color: var(--dim); margin-bottom: 8px;
+    font-size: .65rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: .1em;
+    color: var(--dim);
+    margin-bottom: 8px;
 }
+
 .mc-value {
     font-family: 'Inter Tight', 'Inter', sans-serif;
-    font-size: 2rem; font-weight: 900; letter-spacing: -.04em;
-    color: var(--ink); line-height: 1; margin-bottom: 6px;
+    font-size: 2rem;
+    font-weight: 900;
+    letter-spacing: -.04em;
+    color: var(--ink);
+    line-height: 1;
+    margin-bottom: 6px;
 }
-.mc-delta { display: flex; align-items: center; gap: 4px; font-size: .72rem; font-weight: 700; margin-bottom: 3px; }
-.mc-delta.up   { color: var(--green); }
-.mc-delta.down { color: var(--red); }
+
+.mc-delta {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: .72rem;
+    font-weight: 800;
+    margin-bottom: 3px;
+}
+.mc-delta.up   { color: #059669; }
+.mc-delta.down { color: #dc2626; }
 .mc-delta.neu  { color: var(--dim); }
 .mc-delta svg  { flex-shrink: 0; }
-.mc-sub { font-size: .68rem; color: var(--dim); }
+
+.mc-sub { font-size: .70rem; color: var(--muted); font-weight: 600; }
 .mc-bar { margin-top: 12px; }
-.mc-bar-bg { background: rgba(255,255,255,.05); border-radius: var(--radius-pill); height: 4px; }
-.mc-bar-fill { border-radius: var(--radius-pill); height: 4px; transition: width .6s ease; }
+.mc-bar-bg { background: rgba(124,58,237,.10); border-radius: var(--radius-pill); height: 5px; }
+.mc-bar-fill { border-radius: var(--radius-pill); height: 5px; transition: width .6s ease; }
 
 /* ── chips ── */
 .chip {
-    display: inline-flex; align-items: center; gap: 4px;
-    padding: 3px 10px; border-radius: var(--radius-pill);
-    font-size: .63rem; font-weight: 800; letter-spacing: .05em;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 10px;
+    border-radius: var(--radius-pill);
+    font-size: .63rem;
+    font-weight: 900;
+    letter-spacing: .05em;
 }
-.ch-p0 { background: rgba(239,68,68,.1);   color: #f87171; border: 1px solid rgba(239,68,68,.22); }
-.ch-p1 { background: rgba(192,38,211,.1);  color: #e879f9; border: 1px solid rgba(192,38,211,.22); }
-.ch-p2 { background: rgba(245,158,11,.1);  color: #fbbf24; border: 1px solid rgba(245,158,11,.22); }
-.ch-p3 { background: rgba(124,58,237,.1);  color: #a78bfa; border: 1px solid rgba(124,58,237,.22); }
-.ch-p4 { background: rgba(16,185,129,.1);  color: #34d399; border: 1px solid rgba(16,185,129,.22); }
+.ch-p0 { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+.ch-p1 { background: #fae8ff; color: #a21caf; border: 1px solid #f5d0fe; }
+.ch-p2 { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+.ch-p3 { background: #ede9fe; color: #5b21b6; border: 1px solid #ddd6fe; }
+.ch-p4 { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
 
-/* ── insight card (GeoCS360) ── */
+/* ── insight card ── */
 .ic {
-    background: var(--card2); border: 1px solid var(--border);
-    border-radius: var(--radius-sm); padding: 12px 14px; margin-bottom: 7px;
-    display: flex; align-items: flex-start; gap: 10px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--purple);
+    border-radius: var(--radius-sm);
+    padding: 13px 15px;
+    margin-bottom: 9px;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    box-shadow: var(--shadow);
 }
-.ic-sym { font-size: 1rem; flex-shrink: 0; line-height: 1.4; }
-.ic-title { font-size: .78rem; font-weight: 800; margin-bottom: 2px; }
-.ic-text  { font-size: .7rem; color: var(--muted); line-height: 1.45; }
 
-/* ── trend card (comparativo temporal) ── */
+.ic-sym {
+    font-size: 1rem;
+    flex-shrink: 0;
+    line-height: 1.4;
+}
+
+.ic-title {
+    font-size: .82rem;
+    font-weight: 900;
+    margin-bottom: 3px;
+    color: var(--ink);
+}
+
+.ic-text {
+    font-size: .73rem;
+    color: var(--muted);
+    line-height: 1.45;
+    font-weight: 550;
+}
+
+/* ── trend card ── */
 .trend-card {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 16px 18px;
-    display: flex; align-items: center; gap: 14px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: var(--shadow);
 }
 .trend-arrow { font-size: 1.6rem; flex-shrink: 0; font-family: monospace; }
-.trend-arrow.up   { color: var(--green); }
-.trend-arrow.down { color: var(--red); }
+.trend-arrow.up   { color: #059669; }
+.trend-arrow.down { color: #dc2626; }
 .trend-arrow.neu  { color: var(--amber); }
-.trend-label { font-size: .65rem; color: var(--dim); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; }
-.trend-val   { font-family:'Inter Tight','Inter',sans-serif; font-size:1.4rem; font-weight:900; color:var(--ink); letter-spacing:-.03em; margin: 2px 0; }
-.trend-sub   { font-size: .67rem; color: var(--muted); }
+.trend-label { font-size: .66rem; color: var(--dim); font-weight: 800; text-transform: uppercase; letter-spacing: .08em; }
+.trend-val { font-family:'Inter Tight','Inter',sans-serif; font-size:1.4rem; font-weight:900; color:var(--ink); letter-spacing:-.03em; margin: 2px 0; }
+.trend-sub { font-size: .70rem; color: var(--muted); font-weight: 600; }
 
 /* ── carrossel ── */
 .carousel-shell { position: relative; margin: 4px 0 12px; }
 .carousel-track {
-    display: flex; gap: 14px; overflow-x: auto;
-    scroll-snap-type: x mandatory; scroll-behavior: smooth;
+    display: flex;
+    gap: 14px;
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scroll-behavior: smooth;
     padding: 6px 4px 20px;
     scrollbar-width: thin;
-    scrollbar-color: rgba(124,58,237,.3) transparent;
+    scrollbar-color: rgba(124,58,237,.35) transparent;
 }
-.carousel-track::-webkit-scrollbar { height: 4px; }
+.carousel-track::-webkit-scrollbar { height: 5px; }
 .carousel-track::-webkit-scrollbar-track { background: transparent; }
-.carousel-track::-webkit-scrollbar-thumb {
-    background: rgba(124,58,237,.3); border-radius: 4px;
-}
-.carousel-track::-webkit-scrollbar-thumb:hover { background: var(--purple); }
+.carousel-track::-webkit-scrollbar-thumb { background: rgba(124,58,237,.35); border-radius: 5px; }
 
 .cslide {
-    flex: 0 0 auto; width: 280px; min-height: 200px;
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px;
+    flex: 0 0 auto;
+    width: 280px;
+    min-height: 200px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px;
     scroll-snap-align: start;
-    transition: border-color .15s, box-shadow .15s;
-    display: flex; flex-direction: column;
+    transition: border-color .15s, box-shadow .15s, transform .15s;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow);
 }
-.cslide:hover { border-color: rgba(140,90,255,.35); box-shadow: var(--glow); }
-.cslide-urgency {
-    display: inline-block; font-size: .62rem; font-weight: 800;
-    text-transform: uppercase; letter-spacing: .07em;
-    padding: 3px 10px; border-radius: var(--radius-pill);
-    margin-bottom: 10px; align-self: flex-start;
-}
-.cslide-title { font-size: .94rem; font-weight: 800; color: var(--ink); margin-bottom: 8px; letter-spacing: -.01em; }
+.cslide:hover { border-color: rgba(124,58,237,.30); box-shadow: var(--shadow-lg); transform: translateY(-1px); }
+.cslide-urgency { display: inline-block; font-size: .62rem; font-weight: 900; text-transform: uppercase; letter-spacing: .07em; padding: 4px 10px; border-radius: var(--radius-pill); margin-bottom: 10px; align-self: flex-start; }
+.cslide-title { font-size: .94rem; font-weight: 900; color: var(--ink); margin-bottom: 8px; letter-spacing: -.01em; }
 .cslide-stats { display: flex; gap: 16px; margin: 8px 0 10px; }
-.cslide-val   { font-family:'Inter Tight','Inter',sans-serif; font-size:1.3rem; font-weight:900; color:var(--purple3); line-height:1.1; word-break:break-word; }
-.cslide-lbl   { font-size:.62rem; color:var(--dim); font-weight:700; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
-.cslide-desc  { font-size:.76rem; color:var(--muted); line-height:1.5; flex-grow:1; }
+.cslide-val { font-family:'Inter Tight','Inter',sans-serif; font-size:1.3rem; font-weight:900; color:var(--purple); line-height:1.1; word-break:break-word; }
+.cslide-lbl { font-size:.62rem; color:var(--dim); font-weight:800; text-transform:uppercase; letter-spacing:.06em; margin-top:2px; }
+.cslide-desc { font-size:.76rem; color:var(--muted); line-height:1.5; flex-grow:1; font-weight:550; }
 
 /* ── health bar ── */
-.hb-bg   { background: rgba(255,255,255,.05); border-radius:var(--radius-pill); height:4px; margin-top:8px; }
-.hb-fill { border-radius:var(--radius-pill); height:4px; transition: width .6s ease; }
+.hb-bg   { background: rgba(124,58,237,.11); border-radius:var(--radius-pill); height:5px; margin-top:8px; }
+.hb-fill { border-radius:var(--radius-pill); height:5px; transition: width .6s ease; }
 
 /* ── client card ── */
 .clc {
-    background: var(--card); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 16px 18px;
-    transition: border-color .15s; margin-bottom: 10px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px 18px;
+    transition: border-color .15s, box-shadow .15s;
+    margin-bottom: 10px;
+    box-shadow: var(--shadow);
 }
-.clc:hover { border-color: rgba(140,90,255,.3); }
-.clc-name { font-size: .88rem; font-weight: 800; color: var(--ink); margin-bottom: 2px; }
-.clc-sector { font-size: .68rem; color: var(--muted); margin-bottom: 10px; }
-.clc-row { display:flex; justify-content:space-between; align-items:center; padding:5px 0; border-bottom:1px solid var(--border2); font-size:.74rem; }
-.clc-key { color: var(--dim); }
-.clc-val { color: var(--ink); font-weight: 700; text-align: right; }
+.clc:hover { border-color: rgba(124,58,237,.30); box-shadow: var(--shadow-lg); }
+.clc-name { font-size: .90rem; font-weight: 900; color: var(--ink); margin-bottom: 2px; }
+.clc-sector { font-size: .70rem; color: var(--muted); margin-bottom: 10px; font-weight: 600; }
+.clc-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--border2); font-size:.74rem; }
+.clc-key { color: var(--dim); font-weight: 700; }
+.clc-val { color: var(--ink); font-weight: 850; text-align: right; }
 
 /* ── ficha row ── */
 .fr { display:flex; justify-content:space-between; padding:9px 0; border-bottom:1px solid var(--border2); font-size:.82rem; }
-.fl { color:var(--dim); font-weight:600; }
-.fv { color:var(--ink); font-weight:700; text-align:right; }
+.fl { color:var(--dim); font-weight:700; }
+.fv { color:var(--ink); font-weight:850; text-align:right; }
 
 /* ── strategy card ── */
 .strategy {
-    background: linear-gradient(135deg, var(--card2), var(--card3));
-    border: 1px solid rgba(124,58,237,.25); border-radius: var(--radius);
-    padding: 22px 24px; position: relative; overflow: hidden;
+    background:
+        radial-gradient(circle at 100% 0%, rgba(124,58,237,.10), transparent 28%),
+        linear-gradient(135deg, #ffffff, #f7f2ff);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 22px 24px;
+    position: relative;
+    overflow: hidden;
+    box-shadow: var(--shadow);
 }
-.strategy::before {
-    content: ''; position: absolute; right: -40px; top: -40px;
-    width: 180px; height: 180px; border-radius: 50%;
-    background: radial-gradient(circle, rgba(192,38,211,.15), transparent 70%);
-    pointer-events: none;
-}
-.strategy-kicker { font-size:.62rem; font-weight:800; text-transform:uppercase; letter-spacing:.1em; color:var(--purple3); margin-bottom:8px; }
-.strategy-title  { font-size:1.05rem; font-weight:800; color:var(--ink); margin-bottom:8px; letter-spacing:-.02em; }
-.strategy-body   { font-size:.83rem; color:var(--muted); line-height:1.6; }
+.strategy-kicker { font-size:.64rem; font-weight:900; text-transform:uppercase; letter-spacing:.1em; color:var(--purple); margin-bottom:8px; }
+.strategy-title  { font-size:1.05rem; font-weight:900; color:var(--ink); margin-bottom:8px; letter-spacing:-.02em; }
+.strategy-body   { font-size:.84rem; color:var(--muted); line-height:1.6; font-weight:550; }
 
 /* ── inputs ── */
 .stTextInput input,
 .stSelectbox [data-baseweb="select"] > div,
 .stMultiSelect [data-baseweb="select"] > div,
 .stNumberInput input {
-    background: var(--card2) !important; color: var(--ink) !important;
-    border: 1px solid var(--border) !important; border-radius: var(--radius-sm) !important;
+    background: #ffffff !important;
+    color: var(--ink) !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius-sm) !important;
     min-height: 42px !important;
 }
-.stTextInput input:focus { border-color: var(--purple) !important; box-shadow: 0 0 0 3px rgba(124,58,237,.18) !important; }
+.stTextInput input:focus { border-color: var(--purple) !important; box-shadow: 0 0 0 3px rgba(124,58,237,.14) !important; }
 
 /* ── buttons ── */
-.stButton > button, .stDownloadButton > button {
-    background: linear-gradient(135deg, var(--purple), var(--pink)) !important;
-    color: #fff !important; border: none !important;
+.stButton > button,
+.stDownloadButton > button {
+    background: linear-gradient(135deg, var(--purple), var(--purple2)) !important;
+    color: #fff !important;
+    border: none !important;
     border-radius: var(--radius-pill) !important;
-    font-weight: 700 !important; min-height: 42px !important;
-    box-shadow: 0 4px 16px var(--glow-p) !important;
+    font-weight: 800 !important;
+    min-height: 42px !important;
+    box-shadow: 0 8px 20px rgba(124,58,237,.20) !important;
     transition: transform .15s, box-shadow .15s !important;
 }
-.stButton > button:hover, .stDownloadButton > button:hover {
-    transform: translateY(-2px) !important;
-    box-shadow: 0 8px 28px var(--glow-p) !important;
-}
+.stButton > button:hover,
+.stDownloadButton > button:hover { transform: translateY(-1px) !important; box-shadow: 0 12px 30px rgba(124,58,237,.24) !important; }
 
-/* ── dataframe ── */
+/* ── dataframe e gráficos ── */
 [data-testid="stDataFrame"] {
-    background: var(--card) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important; overflow: hidden !important;
-}
-[data-testid="stPlotlyChart"] {
-    background: var(--card) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--radius) !important; padding: 8px !important;
+    background: #fdfcff !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    overflow: hidden !important;
+    box-shadow: var(--shadow) !important;
 }
 
-/* ── label / caption ── */
+[data-testid="stPlotlyChart"] {
+    background: #fdfcff !important;
+    border: 1px solid var(--border) !important;
+    border-radius: var(--radius) !important;
+    padding: 10px !important;
+    box-shadow: var(--shadow) !important;
+}
+
 label, .stCaption, .stMarkdown p { color: var(--muted) !important; }
 
 /* ── export card ── */
-.export-card {
-    background: var(--card2); border: 1px solid var(--border);
-    border-radius: var(--radius); padding: 18px;
-}
-.export-title { font-size:.84rem; font-weight:800; color:var(--ink); margin-bottom:12px; }
+.export-card { background: #ffffff; border: 1px solid var(--border); border-radius: var(--radius); padding: 18px; box-shadow: var(--shadow); }
+.export-title { font-size:.84rem; font-weight:900; color:var(--ink); margin-bottom:12px; }
 
 /* ── page header ── */
 .ph {
-    border-bottom: 1px solid var(--border2);
-    padding: 28px 0 20px; margin-bottom: 28px;
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+    margin: 18px 0 28px;
 }
-.ph h2 {
-    font-family: 'Inter Tight', 'Inter', sans-serif;
-    font-size: 1.6rem; font-weight: 900; color: var(--ink);
-    letter-spacing: -.04em; margin: 0 0 4px;
-}
-.ph p { color: var(--muted); font-size: .85rem; margin: 0; }
+.ph h2 { font-family: 'Inter Tight', 'Inter', sans-serif; font-size: 1.55rem; font-weight: 900; color: var(--ink); letter-spacing: -.04em; margin: 0 0 5px; }
+.ph p { color: var(--muted); font-size: .86rem; margin: 0; font-weight: 550; }
 
 /* ── empty ── */
-.empty {
-    background: var(--card); border: 1px dashed var(--border);
-    border-radius: var(--radius); padding: 48px; text-align: center;
-}
+.empty { background: #ffffff; border: 1px dashed var(--border); border-radius: var(--radius); padding: 48px; text-align: center; box-shadow: var(--shadow); }
 .empty-text { font-size: .88rem; color: var(--muted); }
 
 /* ── slider ── */
-.stSlider [data-baseweb="slider"] > div { background: var(--purple) !important; }
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: var(--purple) !important;
+    border: 2px solid #ffffff !important;
+    box-shadow: 0 3px 10px rgba(105,87,184,0.18) !important;
+}
+.stSlider [data-baseweb="slider"] > div > div > div {
+    background: rgba(105,87,184,0.18) !important;
+}
+.stSlider [data-baseweb="slider"] > div > div > div > div {
+    background: linear-gradient(90deg, var(--purple2), var(--purple)) !important;
+}
+.stSlider p, .stSlider label { color: var(--muted) !important; }
 
 /* ── expander ── */
-.streamlit-expanderHeader {
-    background: var(--card) !important; border: 1px solid var(--border) !important;
-    border-radius: var(--radius-sm) !important; color: var(--ink) !important;
+.streamlit-expanderHeader { background: #ffffff !important; border: 1px solid var(--border) !important; border-radius: var(--radius-sm) !important; color: var(--ink) !important; }
+
+
+.soft-note {
+    background: #f8f6fb;
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--purple);
+    border-radius: 12px;
+    padding: 10px 12px;
+    color: var(--muted);
+    font-size: .74rem;
+    line-height: 1.5;
+    margin: 8px 0 14px;
+}
+.soft-note strong { color: var(--ink); }
+.chart-help {
+    color: var(--muted);
+    font-size: .72rem;
+    margin-top: -6px;
+    margin-bottom: 8px;
 }
 
-/* ══ v11: scroll reveal ══ */
+@media (max-width: 900px) {
+    .hero { min-height: auto; padding: 42px 20px; }
+    .hero-title { font-size: 2.55rem; }
+    .nav-wrap { border-radius: 18px; }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   V8 — SquadEasy-inspired, sem copiar: nav flutuante, hero editorial, clean
+   ══════════════════════════════════════════════════════════════════════════════ */
+:root {
+    --bg:       #eee8df;
+    --bg2:      #f6f1ea;
+    --card:     #fffdf9;
+    --card2:    #f8f3ec;
+    --card3:    #eee6dc;
+    --border:   rgba(44,31,59,0.12);
+    --border2:  rgba(44,31,59,0.07);
+
+    --ink:      #15111d;
+    --muted:    #625a6f;
+    --dim:      #8a8194;
+
+    --purple:   #5b4aa0;
+    --purple2:  #6f5bb7;
+    --purple3:  #8671cc;
+    --purple4:  #a896db;
+    --lilac:    #eee9fb;
+    --pink:     #b15b9c;
+    --fuchsia:  #cc73b8;
+
+    --surface-warm: #fffaf3;
+    --surface-cold: #f9f6ff;
+
+    --shadow:   0 14px 36px rgba(36, 27, 47, 0.09), 0 0 0 1px var(--border);
+    --shadow-lg:0 24px 62px rgba(36, 27, 47, 0.16), 0 0 0 1px rgba(44,31,59,0.10);
+    --glow:     0 20px 48px rgba(91, 74, 160, 0.14);
+}
+
+[data-testid="stAppViewContainer"] {
+    background:
+        radial-gradient(circle at 7% 9%, rgba(111,91,183,.10), transparent 24%),
+        radial-gradient(circle at 94% 4%, rgba(177,91,156,.07), transparent 20%),
+        linear-gradient(180deg, #efe4d4 0%, #f2eee8 42%, #faf7f2 100%) !important;
+}
+
+.block-container {
+    max-width: 1420px !important;
+    padding: 0 1.7rem 4rem !important;
+}
+
+/* Floating pill navbar like a modern SaaS landing */
+.nav-wrap {
+    position: sticky !important;
+    top: 14px !important;
+    z-index: 1000 !important;
+    max-width: 1180px !important;
+    margin: 14px auto 24px !important;
+    padding: 12px 174px 12px 174px !important;
+    min-height: 68px !important;
+    border-radius: 24px !important;
+    background: rgba(255, 248, 238, 0.84) !important;
+    border: 1px solid rgba(43,31,47,0.10) !important;
+    box-shadow: 0 18px 42px rgba(44, 31, 59, 0.13) !important;
+    backdrop-filter: blur(20px) saturate(155%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(155%) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.nav-wrap::before {
+    content: "mirai\\A hub";
+    white-space: pre;
+    position: absolute;
+    left: 28px;
+    top: 17px;
+    color: #111018;
+    font-family: 'Inter Tight','Inter',sans-serif !important;
+    font-size: 1.02rem;
+    line-height: .82;
+    font-weight: 950;
+    letter-spacing: -.06em;
+}
+
+.nav-wrap::after {
+    content: "AÇÕES  →";
+    position: absolute;
+    right: 18px;
+    top: 14px;
+    background: #111018;
+    color: #fff;
+    padding: 12px 18px;
+    border-radius: 999px;
+    font-weight: 900;
+    font-size: .74rem;
+    letter-spacing: .02em;
+    box-shadow: 0 10px 22px rgba(17,16,24,.16);
+}
+
+.nav-wrap [data-testid="stRadio"] div[role="radiogroup"] {
+    justify-content: center !important;
+    gap: 3px !important;
+    flex-wrap: nowrap !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label {
+    border: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 10px 12px !important;
+    border-radius: 999px !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label p,
+.nav-wrap [data-testid="stRadio"] label span,
+.nav-wrap [data-testid="stRadio"] label div {
+    color: #261f30 !important;
+    font-weight: 780 !important;
+    font-size: .78rem !important;
+    letter-spacing: -.01em !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label:hover {
+    background: rgba(255,255,255,.56) !important;
+    transform: none !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) {
+    background: rgba(91,74,160,.11) !important;
+    box-shadow: inset 0 0 0 1px rgba(91,74,160,.10) !important;
+}
+
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) p,
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) span,
+.nav-wrap [data-testid="stRadio"] label:has(input:checked) div {
+    color: #5b4aa0 !important;
+}
+
+.nav-wrap:hover {
+    box-shadow: 0 22px 54px rgba(44,31,59,.18) !important;
+}
+
+/* Hero editorial full-width */
+.hero {
+    min-height: 74vh !important;
+    margin: 18px 0 38px !important;
+    padding: 88px 28px 80px !important;
+    border: 0 !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    overflow: visible !important;
+}
+
+.hero::before {
+    content: "";
+    position: absolute;
+    inset: 36px 3% 22px;
+    border-radius: 42px;
+    background:
+        radial-gradient(circle at 18% 20%, rgba(91,74,160,.12), transparent 23%),
+        radial-gradient(circle at 84% 16%, rgba(177,91,156,.09), transparent 21%),
+        linear-gradient(180deg, rgba(255,250,243,.66), rgba(255,255,255,.24));
+    border: 1px solid rgba(44,31,59,.08);
+    box-shadow: 0 22px 62px rgba(44,31,59,.08);
+    pointer-events: none;
+    mask-image: linear-gradient(180deg, rgba(0,0,0,.9), rgba(0,0,0,.55) 76%, transparent);
+}
+
+.hero-kicker {
+    background: rgba(255,255,255,.48) !important;
+    border: 1px solid rgba(91,74,160,.18) !important;
+    color: #5b4aa0 !important;
+    margin-bottom: 24px !important;
+    box-shadow: 0 8px 22px rgba(44,31,59,.07);
+}
+
+.hero-title {
+    max-width: 1060px !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+    color: #08070c !important;
+    font-size: clamp(3rem, 6.8vw, 6.2rem) !important;
+    line-height: .92 !important;
+    letter-spacing: -.075em !important;
+    text-transform: uppercase;
+}
+
+.hero-title .accent {
+    background: linear-gradient(135deg, #5b4aa0 0%, #b15b9c 78%) !important;
+    -webkit-background-clip: text !important;
+    background-clip: text !important;
+}
+
+.hero-title .outline {
+    color: #08070c !important;
+}
+
+.hero-sub {
+    max-width: 700px !important;
+    color: #4f465d !important;
+    font-size: 1.02rem !important;
+    font-weight: 560 !important;
+}
+
+.hero::after {
+    content: "QSC ativo   •   M16 em foco   •   Cross-sell priorizado";
+    position: absolute;
+    left: 50%;
+    bottom: 48px;
+    transform: translateX(-50%);
+    background: #111018;
+    color: #fff;
+    border-radius: 999px;
+    padding: 14px 22px;
+    font-size: .78rem;
+    font-weight: 850;
+    letter-spacing: .02em;
+    box-shadow: 0 18px 42px rgba(17,16,24,.18);
+    z-index: 3;
+}
+
+.sec-head {
+    margin: 48px 0 16px !important;
+}
+
+.sec-title {
+    color: #14111d !important;
+    font-size: 1.26rem !important;
+}
+
+.sec-sub {
+    color: #6b6276 !important;
+    font-weight: 600 !important;
+}
+
+.sec-badge {
+    background: rgba(255,255,255,.62) !important;
+    color: #5b4aa0 !important;
+    border-color: rgba(91,74,160,.13) !important;
+}
+
+.mc, .ic, .trend-card, .cslide, .clc, .strategy, .export-card, .ph,
+[data-testid="stDataFrame"], [data-testid="stPlotlyChart"] {
+    background: rgba(255, 253, 249, 0.92) !important;
+    border-color: rgba(44,31,59,0.11) !important;
+    box-shadow: 0 16px 38px rgba(44,31,59,.08), 0 0 0 1px rgba(44,31,59,.035) !important;
+}
+
+.mc {
+    border-radius: 20px !important;
+}
+
+.mc::before {
+    height: 2px !important;
+    background: linear-gradient(90deg, #5b4aa0, #b15b9c) !important;
+}
+
+.mc-value, .hero-stat-val, .trend-val, .clc-name, .strategy-title, .ph h2 {
+    color: #15111d !important;
+}
+
+.mc-label, .trend-label {
+    color: #73687e !important;
+}
+
+.mc-sub, .ic-text, .strategy-body, .clc-sector, .trend-sub, .ph p {
+    color: #625a6f !important;
+}
+
+[data-testid="stPlotlyChart"] .gtitle {
+    display: none !important;
+}
+[data-testid="stPlotlyChart"] text {
+    fill: #41384f !important;
+}
+[data-testid="stPlotlyChart"] .legend text {
+    fill: #3a3346 !important;
+}
+[data-testid="stPlotlyChart"] .xtick text,
+[data-testid="stPlotlyChart"] .ytick text {
+    fill: #746b7f !important;
+}
+
+.stMultiSelect [data-baseweb="tag"] {
+    background: #f1edf7 !important;
+    color: #352d46 !important;
+    border: 1px solid rgba(91,74,160,.16) !important;
+}
+.stMultiSelect [data-baseweb="tag"] span {
+    color: #352d46 !important;
+}
+
+.stSlider [data-baseweb="slider"] > div > div > div {
+    background: rgba(91,74,160,.20) !important;
+}
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: #5b4aa0 !important;
+    box-shadow: 0 4px 12px rgba(91,74,160,.20) !important;
+}
+
 .revealable {
     opacity: 0;
-    transform: translateY(18px) scale(.988);
-    transition: opacity .50s ease, transform .50s ease;
+    transform: translateY(22px) scale(.985);
+    transition: opacity .55s ease, transform .55s ease;
 }
 .revealable.reveal-in {
     opacity: 1;
     transform: translateY(0) scale(1);
 }
 
-/* ══ v11: topbar container (st-key) ══ */
+.cslide-val, .mc-value {
+    color: #5b4aa0 !important;
+}
+
+@media (max-width: 980px) {
+    .nav-wrap {
+        padding: 76px 14px 14px !important;
+        border-radius: 24px !important;
+    }
+    .nav-wrap::after { top: 14px; right: 14px; }
+    .nav-wrap::before { top: 18px; left: 20px; }
+    .nav-wrap [data-testid="stRadio"] div[role="radiogroup"] {
+        flex-wrap: wrap !important;
+    }
+    .hero-title { font-size: clamp(2.2rem, 12vw, 3.8rem) !important; }
+    .hero::after { display: none; }
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   V9 — Topbar real com popover de ações + correção visual dos gráficos
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* Esconde a nav-wrap antiga, se sobrar CSS anterior */
+.nav-wrap { display: none !important; }
+
+.mirai-topbar {
+    position: sticky;
+    top: 14px;
+    z-index: 1000;
+    max-width: 1180px;
+    margin: 14px auto 24px;
+    padding: 13px 16px 13px 24px;
+    min-height: 70px;
+    border-radius: 25px;
+    background: rgba(255, 248, 238, 0.88);
+    border: 1px solid rgba(43,31,47,0.10);
+    box-shadow: 0 18px 42px rgba(44, 31, 59, 0.13);
+    backdrop-filter: blur(20px) saturate(155%);
+    -webkit-backdrop-filter: blur(20px) saturate(155%);
+}
+
+.mirai-brand {
+    color: #111018;
+    font-family: 'Inter Tight','Inter',sans-serif !important;
+    font-size: 1.04rem;
+    line-height: .82;
+    font-weight: 950;
+    letter-spacing: -.06em;
+}
+
+.mirai-brand span {
+    color: #111018;
+}
+
+.mirai-current {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    color: #4f465d;
+    font-size: .80rem;
+    font-weight: 760;
+    white-space: nowrap;
+}
+
+.mirai-current span {
+    color: #7a7085;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .10em;
+    font-weight: 850;
+}
+
+.mirai-current strong {
+    color: #15111d;
+    font-weight: 900;
+    letter-spacing: -.02em;
+}
+
+/* Botão do popover AÇÕES */
+.mirai-topbar [data-testid="stPopover"] button,
+.mirai-topbar button[kind="secondary"],
+.mirai-topbar .stButton > button {
+    background: #111018 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    min-height: 48px !important;
+    padding: 0 18px !important;
+    font-size: .82rem !important;
+    font-weight: 900 !important;
+    box-shadow: 0 12px 26px rgba(17,16,24,.16) !important;
+}
+
+.mirai-topbar [data-testid="stPopover"] button:hover,
+.mirai-topbar button[kind="secondary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 16px 34px rgba(17,16,24,.22) !important;
+}
+
+/* Conteúdo do popover */
+.actions-popover-title {
+    color: #15111d;
+    font-size: .95rem;
+    font-weight: 950;
+    letter-spacing: -.03em;
+    margin: 2px 0 10px;
+}
+
+.actions-popover-group {
+    color: #6f5bb7;
+    font-size: .68rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    margin: 14px 0 6px;
+}
+
+.actions-popover-note {
+    color: #746b7f;
+    font-size: .72rem;
+    line-height: 1.45;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(44,31,59,.08);
+}
+
+/* Botões dentro do popover: claros e elegantes */
+[data-testid="stPopoverBody"] .stButton > button {
+    background: #fffdf9 !important;
+    color: #251d35 !important;
+    border: 1px solid rgba(44,31,59,.10) !important;
+    border-radius: 14px !important;
+    box-shadow: 0 5px 16px rgba(44,31,59,.06) !important;
+    justify-content: flex-start !important;
+    min-height: 39px !important;
+    font-size: .80rem !important;
+    font-weight: 820 !important;
+}
+
+[data-testid="stPopoverBody"] .stButton > button:hover {
+    background: #f4eff8 !important;
+    color: #5b4aa0 !important;
+    border-color: rgba(91,74,160,.20) !important;
+}
+
+/* Gráficos com labels mais legíveis */
+[data-testid="stPlotlyChart"] text {
+    fill: #41384f !important;
+}
+[data-testid="stPlotlyChart"] .legend text {
+    fill: #332b40 !important;
+}
+[data-testid="stPlotlyChart"] .gtitle {
+    display: none !important;
+}
+
+/* Evita roxo agressivo nos cards de M */
+.stSlider [data-baseweb="slider"] [role="slider"] {
+    background: #5b4aa0 !important;
+}
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   V10 — topbar real e popover claro/sofisticado
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* mata qualquer wrapper antigo que tenha sobrado de versões anteriores */
+.mirai-topbar,
+.nav-wrap {
+    display: none !important;
+}
+
+/* keyed container real do Streamlit */
 .st-key-mirai_topbar {
     position: sticky !important;
     top: 14px !important;
@@ -456,85 +1152,173 @@ label, .stCaption, .stMarkdown p { color: var(--muted) !important; }
     max-width: 1180px !important;
     margin: 14px auto 24px !important;
     padding: 14px 18px 14px 26px !important;
-    min-height: 80px !important;
+    min-height: 72px !important;
     border-radius: 26px !important;
-    background: rgba(255, 248, 238, 0.92) !important;
+    background: rgba(255, 248, 238, 0.90) !important;
     border: 1px solid rgba(43,31,47,0.10) !important;
     box-shadow: 0 18px 42px rgba(44, 31, 59, 0.13) !important;
     backdrop-filter: blur(20px) saturate(155%) !important;
     -webkit-backdrop-filter: blur(20px) saturate(155%) !important;
 }
 
-/* Esconder nav-wrap antiga */
-.nav-wrap { display: none !important; }
+.st-key-mirai_topbar [data-testid="stHorizontalBlock"] {
+    align-items: center !important;
+}
 
-/* Branding */
-.mirai-brand-wrap { display:flex; flex-direction:column; align-items:flex-start; gap:4px; }
 .mirai-brand {
     color: #111018;
     font-family: 'Inter Tight','Inter',sans-serif !important;
-    font-size: 1.08rem; line-height:.80; font-weight:950; letter-spacing:-.06em;
+    font-size: 1.04rem;
+    line-height: .82;
+    font-weight: 950;
+    letter-spacing: -.06em;
 }
-.mirai-tagline {
-    color: #655b73; font-size:.84rem; font-weight:650; letter-spacing:-.01em;
-    min-height:20px; display:flex; align-items:center; gap:2px;
-}
-.typing-cursor {
-    display:inline-block; color:#5b4aa0; font-weight:900;
-    animation: blinkCursor 1s step-end infinite;
-}
-@keyframes blinkCursor { 50% { opacity:0; } }
 
-/* Label da página atual */
+.mirai-brand span {
+    color: #111018;
+}
+
 .mirai-current {
-    display:flex; justify-content:center; align-items:center; gap:10px;
-    color:#4f465d; font-size:.80rem; font-weight:760; white-space:nowrap;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 10px;
+    color: #4f465d;
+    font-size: .80rem;
+    font-weight: 760;
+    white-space: nowrap;
 }
-.mirai-current span { color:#7a7085; font-size:.72rem; text-transform:uppercase; letter-spacing:.10em; font-weight:850; }
-.mirai-current strong { color:#15111d; font-weight:900; letter-spacing:-.02em; }
 
-/* Botão AÇÕES */
+.mirai-current span {
+    color: #7a7085;
+    font-size: .72rem;
+    text-transform: uppercase;
+    letter-spacing: .10em;
+    font-weight: 850;
+}
+
+.mirai-current strong {
+    color: #15111d;
+    font-weight: 900;
+    letter-spacing: -.02em;
+}
+
+/* botão AÇÕES */
 .st-key-mirai_topbar [data-testid="stPopover"] button,
 .st-key-mirai_topbar button[kind="secondary"] {
-    background: #111018 !important; color: #fff !important; border: none !important;
-    border-radius: 999px !important; min-height: 48px !important; padding: 0 18px !important;
-    font-size: .82rem !important; font-weight: 900 !important;
+    background: #111018 !important;
+    color: #fff !important;
+    border: none !important;
+    border-radius: 999px !important;
+    min-height: 48px !important;
+    padding: 0 18px !important;
+    font-size: .82rem !important;
+    font-weight: 900 !important;
     box-shadow: 0 12px 26px rgba(17,16,24,.16) !important;
 }
-.st-key-mirai_topbar [data-testid="stPopover"] button:hover { transform:translateY(-1px) !important; }
 
-/* Popover claro */
+.st-key-mirai_topbar [data-testid="stPopover"] button:hover,
+.st-key-mirai_topbar button[kind="secondary"]:hover {
+    transform: translateY(-1px) !important;
+    box-shadow: 0 16px 34px rgba(17,16,24,.22) !important;
+}
+
+.st-key-mirai_topbar [data-testid="stPopover"] button::after {
+    content: "→";
+    margin-left: 7px;
+}
+
+.st-key-mirai_topbar [data-testid="stPopover"] button svg,
+.st-key-mirai_topbar [data-testid="stPopover"] button [data-testid="stIconMaterial"],
+.st-key-mirai_topbar [data-testid="stPopover"] button .material-symbols-rounded {
+    display: none !important;
+}
+
+/* popover claro */
+div[data-baseweb="popover"] > div {
+    background: transparent !important;
+}
+
 [data-testid="stPopoverBody"] {
-    background: rgba(255,248,238,.98) !important; color: #15111d !important;
-    border: 1px solid rgba(43,31,47,0.11) !important; border-radius: 24px !important;
-    box-shadow: 0 28px 64px rgba(44,31,59,.22) !important; padding: 18px !important;
+    background: rgba(255, 248, 238, .98) !important;
+    color: #15111d !important;
+    border: 1px solid rgba(43,31,47,0.11) !important;
+    border-radius: 24px !important;
+    box-shadow: 0 28px 64px rgba(44,31,59,.22) !important;
+    padding: 18px !important;
 }
-.actions-popover-title { color:#15111d; font-size:.98rem; font-weight:950; letter-spacing:-.03em; margin:2px 0 10px; }
-.actions-popover-group { color:#5b4aa0; font-size:.68rem; font-weight:950; text-transform:uppercase; letter-spacing:.12em; margin:15px 0 7px; }
-.actions-popover-note  { color:#746b7f; font-size:.72rem; line-height:1.45; margin-top:12px; padding-top:10px; border-top:1px solid rgba(44,31,59,.08); }
+
+[data-testid="stPopoverBody"] * {
+    color: inherit;
+}
+
+.actions-popover-title {
+    color: #15111d;
+    font-size: .98rem;
+    font-weight: 950;
+    letter-spacing: -.03em;
+    margin: 2px 0 10px;
+}
+
+.actions-popover-group {
+    color: #5b4aa0;
+    font-size: .68rem;
+    font-weight: 950;
+    text-transform: uppercase;
+    letter-spacing: .12em;
+    margin: 15px 0 7px;
+}
+
+.actions-popover-note {
+    color: #746b7f;
+    font-size: .72rem;
+    line-height: 1.45;
+    margin-top: 12px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(44,31,59,.08);
+}
+
 [data-testid="stPopoverBody"] .stButton > button {
-    background: #fffdf9 !important; color: #251d35 !important;
-    border: 1px solid rgba(44,31,59,.10) !important; border-radius: 14px !important;
+    background: #fffdf9 !important;
+    color: #251d35 !important;
+    border: 1px solid rgba(44,31,59,.10) !important;
+    border-radius: 14px !important;
     box-shadow: 0 5px 16px rgba(44,31,59,.06) !important;
-    justify-content: flex-start !important; min-height: 39px !important;
-    font-size: .80rem !important; font-weight: 820 !important;
+    justify-content: flex-start !important;
+    min-height: 39px !important;
+    font-size: .80rem !important;
+    font-weight: 820 !important;
 }
+
 [data-testid="stPopoverBody"] .stButton > button:hover {
-    background: #f4eff8 !important; color: #5b4aa0 !important;
+    background: #f4eff8 !important;
+    color: #5b4aa0 !important;
     border-color: rgba(91,74,160,.20) !important;
 }
 
-/* soft-note e chart-help */
-.soft-note {
-    background: #f8f6fb; border: 1px solid var(--border); border-left: 3px solid var(--purple);
-    border-radius: 12px; padding: 10px 12px; color: var(--muted); font-size:.74rem;
-    line-height:1.5; margin:8px 0 14px;
+/* gráficos */
+[data-testid="stPlotlyChart"] .gtitle {
+    display: none !important;
 }
-.soft-note strong { color:var(--ink); }
-.chart-help { color:var(--muted); font-size:.72rem; margin-top:-6px; margin-bottom:8px; }
+[data-testid="stPlotlyChart"] text {
+    fill: #41384f !important;
+}
+[data-testid="stPlotlyChart"] .legend text {
+    fill: #332b40 !important;
+}
 
-/* Hero oculto (topbar substitui) */
-.hero { display: none !important; }
+/* mobile */
+@media (max-width: 980px) {
+    .st-key-mirai_topbar {
+        border-radius: 24px !important;
+        padding: 16px !important;
+    }
+    .mirai-current {
+        justify-content: flex-start;
+        white-space: normal;
+    }
+}
+
 </style>
 """
 
@@ -543,6 +1327,7 @@ label, .stCaption, .stMarkdown p { color: var(--muted) !important; }
 # ══════════════════════════════════════════════════════════════════════════════
 PARALLAX_JS = ""
 
+
 UX_JS = """
 <script>
 (function(){
@@ -550,58 +1335,41 @@ UX_JS = """
     var doc = window.parent.document;
     if(doc.__miraiUXV8) return;
     doc.__miraiUXV8 = true;
-    var selectors = [
-      '.stPlotlyChart','[data-testid="stPlotlyChart"]',
-      '[data-testid="stDataFrame"]','.mc','.ic','.trend-card',
-      '.cslide','.clc','.strategy','.ph','.sec-head'
-    ];
-    var obs = new IntersectionObserver(function(entries){
-      entries.forEach(function(e){
-        if(e.isIntersecting){ e.target.classList.add('reveal-in'); obs.unobserve(e.target); }
-      });
-    }, {threshold: 0.08, rootMargin: '0px 0px -6% 0px'});
-    function observe(){
+
+    function markRevealables(){
+      var selectors = [
+        '.stPlotlyChart',
+        '[data-testid="stPlotlyChart"]',
+        '[data-testid="stDataFrame"]',
+        '.mc', '.ic', '.trend-card', '.cslide', '.clc', '.strategy', '.ph', '.sec-head'
+      ];
       doc.querySelectorAll(selectors.join(',')).forEach(function(el){
         if(!el.classList.contains('revealable')) el.classList.add('revealable');
-        if(!el.classList.contains('reveal-in')) obs.observe(el);
       });
     }
-    observe(); setInterval(observe, 1200);
+
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        if(e.isIntersecting){
+          e.target.classList.add('reveal-in');
+          obs.unobserve(e.target);
+        }
+      });
+    }, {threshold: 0.08, rootMargin: '0px 0px -6% 0px'});
+
+    function observe(){
+      markRevealables();
+      doc.querySelectorAll('.revealable:not(.reveal-in)').forEach(function(el){ obs.observe(el); });
+    }
+
+    observe();
+    setInterval(observe, 1200);
   }
   setTimeout(boot, 120);
 })();
 </script>
 """
 
-TYPE_JS = """
-<script>
-(function(){
-  function bootTyping(){
-    var doc = window.parent.document;
-    var el = doc.getElementById("mirai-typing");
-    if(!el || doc.__miraiTypingBooted) return;
-    doc.__miraiTypingBooted = true;
-    var text = "Uma visão 360 da carteira";
-    var typing = true; var i = 0;
-    function tick(){
-      if(!el){ doc.__miraiTypingBooted = false; return; }
-      if(typing){ i = Math.min(i+1, text.length); el.textContent = text.slice(0,i);
-        if(i >= text.length){ typing=false; setTimeout(tick,1500); return; }
-      } else { i = Math.max(i-1,0); el.textContent = text.slice(0,i);
-        if(i <= 0){ typing=true; setTimeout(tick,250); return; }
-      }
-      setTimeout(tick, typing ? 68 : 38);
-    }
-    tick();
-  }
-  setTimeout(bootTyping, 250);
-  setInterval(function(){
-    var doc = window.parent.document;
-    if(!doc.__miraiTypingBooted) bootTyping();
-  }, 2500);
-})();
-</script>
-"""
 
 # ══════════════════════════════════════════════════════════════════════════════
 # DB
@@ -620,6 +1388,7 @@ def query(sql: str) -> pd.DataFrame:
 
 @st.cache_data(ttl=300)
 def query_params(sql: str, params: tuple = ()) -> pd.DataFrame:
+    """Executa SQL parametrizado no DuckDB/MotherDuck."""
     return get_conn().execute(sql, list(params)).df()
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -648,12 +1417,16 @@ def safe_int(n, default=0):
     except Exception:
         return default
 
+
 def clean_text_value(value) -> str:
+    """Remove bytes nulos e resíduos \0 antes de usar valores textuais em filtros."""
     if value is None:
         return ""
-    return str(value).replace("\x00", "").replace("\0", "").strip()
+    return str(value).replace("\x00", "").replace("\\0", "").strip()
+
 
 def clean_dimension_dataframe(df: pd.DataFrame, column: str) -> pd.DataFrame:
+    """Limpa valores inválidos de dimensões exibidas em selectbox/multiselect."""
     if df.empty or column not in df.columns:
         return df
     out = df.copy()
@@ -662,19 +1435,12 @@ def clean_dimension_dataframe(df: pd.DataFrame, column: str) -> pd.DataFrame:
         .fillna("")
         .astype(str)
         .str.replace("\x00", "", regex=False)
-        .str.replace("\0", "", regex=False)
+        .str.replace("\\0", "", regex=False)
         .str.strip()
     )
-    invalid = {"", "\0", "\x00", "nan", "None", "NULL"}
+    invalid = {"", "\\0", "\x00", "nan", "None", "NULL"}
     out = out[~out[column].isin(invalid)]
     return out.drop_duplicates(subset=[column]).sort_values(column).reset_index(drop=True)
-
-def build_in_clause(column_sql: str, values: list):
-    clean_values = [clean_text_value(v) for v in values if clean_text_value(v)]
-    if not clean_values:
-        return "", tuple()
-    placeholders = ", ".join(["?"] * len(clean_values))
-    return f"{column_sql} IN ({placeholders})", tuple(clean_values)
 
 def delta_html(val, prev, suffix=""):
     if prev is None or prev == 0:
@@ -692,10 +1458,10 @@ def delta_html(val, prev, suffix=""):
         arrow_svg = '<svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 2v8M2 6l4 4 4-4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>'
         return f'<div class="mc-delta down">{arrow_svg} {fmt_num(diff)} ({sign}{pct:.1f}%) {suffix}</div>'
 
-def health_bar(pct, color="#7c3aed"):
+def health_bar(pct, color="#7663c6"):
     return f'<div class="mc-bar"><div class="mc-bar-bg"><div class="hb-fill" style="width:{min(100,max(0,pct))}%;background:{color};"></div></div></div>'
 
-def metric_card(label, value, delta_html_str="", sub="", bar_pct=None, bar_color="#7c3aed", color_cls="cp"):
+def metric_card(label, value, delta_html_str="", sub="", bar_pct=None, bar_color="#7663c6", color_cls="cp"):
     bar_html = health_bar(bar_pct, bar_color) if bar_pct is not None else ""
     sub_html  = f'<div class="mc-sub">{sub}</div>' if sub else ""
     return (
@@ -725,7 +1491,7 @@ def chip_html(prio):
 _URGENCY = {
     "urgente":      ("rgba(239,68,68,.12)",   "#f87171", "URGENTE"),
     "atencao":      ("rgba(245,158,11,.12)",  "#fbbf24", "ATENCAO"),
-    "oportunidade": ("rgba(124,58,237,.12)",  "#a78bfa", "OPORTUNIDADE"),
+    "oportunidade": ("rgba(124,58,237,.12)",  "#a896db", "OPORTUNIDADE"),
     "positivo":     ("rgba(16,185,129,.12)",  "#34d399", "POSITIVO"),
     "neutro":       ("rgba(71,63,104,.18)",   "#8b7eaa", "INFO"),
 }
@@ -756,7 +1522,7 @@ def carousel_html(items, cid):
         btns = st.columns(len(items))
         for i, it in enumerate(items):
             with btns[i]:
-                if st.button(it["title"][:22], key=f"{cid}_b{i}", use_container_width=True):
+                if st.button(it["title"][:22], key=f"{cid}_b{i}", width="stretch"):
                     st.session_state["mb_tipo"] = it.get("mb_tipo","Todos")
                     st.session_state["mailing_df"] = None
                     st.session_state["_nav_pending"] = "Mailing Builder"
@@ -786,21 +1552,47 @@ def strategy_card(kicker, title, body):
 def plotly_dark():
     return dict(
         paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(18,13,37,0.6)",
-        font=dict(color="#4d4368", family="Inter", size=11),
-        xaxis=dict(gridcolor="rgba(140,90,255,.07)", zerolinecolor="rgba(140,90,255,.07)", color="#4d4368"),
-        yaxis=dict(gridcolor="rgba(140,90,255,.07)", zerolinecolor="rgba(140,90,255,.07)", color="#4d4368"),
-        margin=dict(l=8, r=8, t=36, b=8),
-        title_font=dict(color="#8b7eaa", size=13),
-        legend=dict(bgcolor="rgba(0,0,0,0)", font=dict(color="#4d4368", size=11)),
+        plot_bgcolor="#fffdf9",
+        font=dict(color="#41384f", family="Inter", size=11),
+        xaxis=dict(
+            gridcolor="rgba(44,31,59,.08)",
+            zerolinecolor="rgba(44,31,59,.08)",
+            color="#625a6f",
+            title_font=dict(color="#625a6f", size=11),
+            tickfont=dict(color="#625a6f", size=11),
+        ),
+        yaxis=dict(
+            gridcolor="rgba(44,31,59,.06)",
+            zerolinecolor="rgba(44,31,59,.06)",
+            color="#625a6f",
+            title_font=dict(color="#625a6f", size=11),
+            tickfont=dict(color="#625a6f", size=11),
+        ),
+        margin=dict(l=8, r=8, t=18, b=8),
+        legend=dict(
+            bgcolor="rgba(0,0,0,0)",
+            font=dict(color="#3a3346", size=12),
+            title_font=dict(color="#3a3346", size=12),
+        ),
+        hoverlabel=dict(
+            bgcolor="#fffdf9",
+            bordercolor="rgba(44,31,59,.16)",
+            font=dict(color="#15111d"),
+        ),
     )
 
-PURPLE_SEQ = ["#7c3aed","#9061f9","#a78bfa","#c026d3","#e879f9","#c4b5fd","#38bdf8","#10b981"]
+PURPLE_SEQ = ["#7663c6","#8974d6","#a896db","#9f54c1","#e879f9","#c4b5fd","#38bdf8","#10b981"]
 
 def style_fig(fig, h=380, show_legend=False):
-    fig.update_layout(**plotly_dark(), height=h, showlegend=show_legend)
-    fig.update_traces(textfont=dict(color="#f1eeff", size=11), selector=dict(type="bar"))
-    fig.update_traces(textfont=dict(color="#f1eeff", size=11), selector=dict(type="pie"))
+    # Sem title/title_text duplicado: evita o erro "multiple values for keyword argument title".
+    fig.update_layout(**plotly_dark())
+    fig.update_layout(height=h, showlegend=show_legend)
+    fig.update_layout(title=None)
+    fig.update_layout(title_text="")
+    fig.update_traces(textfont=dict(color="#312944", size=11), selector=dict(type="bar"))
+    fig.update_traces(textfont=dict(color="#312944", size=11), selector=dict(type="pie"))
+    fig.update_xaxes(automargin=True)
+    fig.update_yaxes(automargin=True)
     return fig
 
 def request_page(name):
@@ -818,26 +1610,17 @@ def render_nav(options):
         st.session_state[widget_key] = options[0]
 
     groups = {
-        "Visão geral":      ["Visao Geral — Linhas", "Visao Geral — CNPJs"],
-        "QSC e metas":      ["Saude QSC", "Comparativos", "Metas e Certificacao"],
-        "Carteira":         ["Jornada por M", "Por Vertical", "Busca por Cliente"],
-        "Ação comercial":   ["Alertas da Semana", "Oportunidades", "Mailing Builder"],
+        "Visão geral": ["Visao Geral — Linhas", "Visao Geral — CNPJs"],
+        "QSC e metas": ["Saude QSC", "Comparativos", "Metas e Certificacao"],
+        "Carteira": ["Jornada por M", "Por Vertical", "Busca por Cliente"],
+        "Ação comercial": ["Alertas da Semana", "Oportunidades", "Mailing Builder"],
     }
 
     with st.container(key="mirai_topbar"):
-        left, mid, right = st.columns([1.55, 2.5, 1.0], vertical_alignment="center")
+        left, mid, right = st.columns([1.05, 3.15, 1.05], vertical_alignment="center")
 
         with left:
-            st.markdown(
-                '''<div class="mirai-brand-wrap">
-                    <div class="mirai-brand">mirai<br><span>hub</span></div>
-                    <div class="mirai-tagline">
-                        <span id="mirai-typing">Uma visão 360 da carteira</span>
-                        <span class="typing-cursor">|</span>
-                    </div>
-                </div>''',
-                unsafe_allow_html=True,
-            )
+            st.markdown('<div class="mirai-brand">mirai<br><span>hub</span></div>', unsafe_allow_html=True)
 
         with mid:
             current = st.session_state.get(widget_key, options[0])
@@ -849,16 +1632,18 @@ def render_nav(options):
         with right:
             with st.popover("AÇÕES"):
                 st.markdown('<div class="actions-popover-title">Navegação do hub</div>', unsafe_allow_html=True)
+
                 for group, items in groups.items():
                     st.markdown(f'<div class="actions-popover-group">{group}</div>', unsafe_allow_html=True)
                     for item in items:
                         active = item == st.session_state.get(widget_key)
                         label = ("✓ " if active else "") + item
-                        if st.button(label, key=f"nav_action_{item}", use_container_width=True):
+                        if st.button(label, key=f"nav_action_{item}", width="stretch"):
                             st.session_state[widget_key] = item
                             st.rerun()
+
                 st.markdown(
-                    '<div class="actions-popover-note">Navegação rápida entre as seções do hub.</div>',
+                    '<div class="actions-popover-note">Alternar entre visão executiva, QSC, alertas, oportunidades e mailing.</div>',
                     unsafe_allow_html=True,
                 )
 
@@ -870,7 +1655,6 @@ def render_nav(options):
 st.markdown(CSS, unsafe_allow_html=True)
 components.html(PARALLAX_JS, height=0, width=0)
 components.html(UX_JS, height=0, width=0)
-components.html(TYPE_JS, height=0, width=0)
 
 NAV = [
     "Visao Geral — Linhas",
@@ -913,7 +1697,7 @@ def generate_insights_carteira(df_kpi_linhas, df_saude):
             out.append({"sym":"●","title":f"{fmt_num(inv)} clientes invadidos","text":"Outro canal está atendendo CNPJs da sua carteira. Contestar antes de qualquer nova venda.","color":"#f87171"})
     except Exception: pass
     if len(out) < 3:
-        out.append({"sym":"◆","title":"Base QSC atualizada","text":"Banco de dados com dados de Carteira, Móvel e Fixa integrados. Motor de priorização ativo.","color":"#a78bfa"})
+        out.append({"sym":"◆","title":"Base QSC atualizada","text":"Banco de dados com dados de Carteira, Móvel e Fixa integrados. Motor de priorização ativo.","color":"#a896db"})
     return out[:5]
 
 if page == "Visao Geral — Linhas":
@@ -922,13 +1706,12 @@ if page == "Visao Geral — Linhas":
     <div class="hero">
       <div class="hero-kicker"><span class="dot"></span>Mirai Telecom &middot; Vivo B2B Consultivo</div>
       <div class="hero-title">
-        Hub de<br>
-        <span class="accent">Carteira</span>
-        <span class="outline"> B2B</span>
+        Sua carteira<br>
+        <span class="accent">mais perto</span><br>
+        da próxima ação.
       </div>
       <div class="hero-sub">
-        Inteligencia comercial, QSC e mailings em uma única plataforma
-        para o canal Vivo B2B atuar com precisao na carteira.
+        Uma central de leitura comercial para transformar linhas, CNPJs, QSC, alertas e oportunidades em decisões simples, rápidas e priorizadas.
       </div>
     </div>
     """, unsafe_allow_html=True)
@@ -940,7 +1723,8 @@ if page == "Visao Geral — Linhas":
                COUNT(CASE WHEN flg_elegivel_comercial='SIM' THEN 1 END) AS elegiveis,
                COUNT(CASE WHEN flg_oportunidade_fixa='SIM' THEN 1 END) AS oport_fixa,
                ROUND(AVG(CAST(m AS DOUBLE)),1) AS m_medio,
-               ROUND(SUM(fat_medio),2) AS fat_total
+               ROUND(SUM(fat_medio),2) AS fat_total,
+               ROUND(AVG(CASE WHEN flg_ativa='SIM' THEN fat_medio END),2) AS arpu_medio
         FROM main.fato_linha_movel
         WHERE dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
     """)
@@ -949,7 +1733,8 @@ if page == "Visao Geral — Linhas":
     df_snap2 = query("""
         SELECT COUNT(*) AS total, COUNT(CASE WHEN flg_ativa='SIM' THEN 1 END) AS ativas,
                COUNT(CASE WHEN flg_m16_urgente='SIM' THEN 1 END) AS m16,
-               ROUND(SUM(fat_medio),2) AS fat_total
+               ROUND(SUM(fat_medio),2) AS fat_total,
+               ROUND(AVG(CASE WHEN flg_ativa='SIM' THEN fat_medio END),2) AS arpu_medio
         FROM main.fato_linha_movel
         WHERE dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel
             WHERE dt_snapshot < (SELECT MAX(dt_snapshot) FROM main.fato_linha_movel))
@@ -971,8 +1756,8 @@ if page == "Visao Geral — Linhas":
         dh3 = delta_html(safe_int(rs.m16), safe_int(r2.m16) if r2 is not None else None, "vs anterior")
         st.markdown(metric_card("M16 urgente", fmt_num(rs.m16), dh3, "blindar esta semana", color_cls="cr"), unsafe_allow_html=True)
     with c4:
-        dh4 = delta_html(float(rs.fat_total or 0), float(r2.fat_total or 0) if r2 is not None else None, "vs anterior")
-        st.markdown(metric_card("Faturamento mensal", fmt_brl(rs.fat_total), dh4, "receita recorrente", color_cls="ca"), unsafe_allow_html=True)
+        dh4 = delta_html(float(rs.arpu_medio or 0), float(r2.arpu_medio or 0) if r2 is not None else None, "vs anterior")
+        st.markdown(metric_card("ARPU mensal", fmt_brl(rs.arpu_medio), dh4, "ticket medio por linha ativa", color_cls="ca"), unsafe_allow_html=True)
 
     c5,c6,c7,c8 = st.columns(4)
     with c5: st.markdown(metric_card("M medio", rs.m_medio, sub="maturidade do parque"), unsafe_allow_html=True)
@@ -1001,8 +1786,8 @@ if page == "Visao Geral — Linhas":
         fig = px.bar(df_v.sort_values("linhas"), x="linhas", y="vertical", orientation="h",
                      text="linhas", color_discrete_sequence=PURPLE_SEQ,
                      labels={"linhas":"Linhas","vertical":""})
-        fig.update_traces(marker_color="#7c3aed", textfont_color="#f1eeff", textposition="outside")
-        st.plotly_chart(style_fig(fig, h=420), use_container_width=True)
+        fig.update_traces(marker_color="#5b4aa0", textfont_color="#312944", textposition="outside")
+        st.plotly_chart(style_fig(fig, h=420), width="stretch")
 
     # carrossel mailings prioritários
     df_al = query("SELECT tipo_alerta, COUNT(*) AS q, COUNT(DISTINCT cnpj) AS c FROM main.vw_alertas_semana GROUP BY 1")
@@ -1044,8 +1829,8 @@ if page == "Visao Geral — Linhas":
         cmap = {"VERDE":"#10b981","AMARELO":"#f59e0b","VERMELHO":"#ef4444","PRETO":"#1f1235","CINZA":"#4d4368"}
         fig2 = px.pie(df_sem, names="semaforo", values="q", color="semaforo",
                       color_discrete_map=cmap, hole=0.6)
-        fig2.update_traces(textinfo="percent", textfont_color="#f1eeff", textfont_size=11)
-        st.plotly_chart(style_fig(fig2, h=300), use_container_width=True)
+        fig2.update_traces(textinfo="percent", textfont_color="#312944", textfont_size=11)
+        st.plotly_chart(style_fig(fig2, h=300), width="stretch")
     with col_f:
         sec_head("Faturamento por vertical")
         df_fat = query("""
@@ -1055,10 +1840,10 @@ if page == "Visao Geral — Linhas":
             GROUP BY 1 ORDER BY fat DESC LIMIT 10
         """)
         fig3 = px.bar(df_fat.sort_values("fat"), x="fat", y="v", orientation="h",
-                      color="fat", color_continuous_scale=["#1a1235","#7c3aed","#c026d3"],
+                      color="fat", color_continuous_scale=["#e8e0ef","#8d7fbc","#5b4aa0"],
                       labels={"fat":"R$","v":""})
         fig3.update_layout(coloraxis_showscale=False)
-        st.plotly_chart(style_fig(fig3, h=300), use_container_width=True)
+        st.plotly_chart(style_fig(fig3, h=300), width="stretch")
 
     strategy_card(
         "LEITURA EXECUTIVA",
@@ -1122,7 +1907,8 @@ elif page == "Visao Geral — CNPJs":
     col_m, col_r = st.columns([1.4, 1], gap="large")
     with col_m:
         sec_head("Motor de priorizacao — por CNPJ", "cenarios cruzados CAR + debito + biometria + M + invasao")
-        CORES_P = {"P0":"#f87171","P1":"#e879f9","P2":"#fbbf24","P3":"#a78bfa","P4":"#34d399","P5":"#7c3aed","P6":"#10b981"}
+        st.markdown('<div class="soft-note"><strong>Como ler o indice de prioridade:</strong> score de 0 a 100 calculado a partir da combinacao de risco, oportunidade comercial e urgencia operacional. Quanto maior o indice, maior a prioridade de acao.</div>', unsafe_allow_html=True)
+        CORES_P = {"P0":"#f87171","P1":"#e879f9","P2":"#fbbf24","P3":"#a896db","P4":"#34d399","P5":"#7663c6","P6":"#10b981"}
         for _, row in df_motor.iterrows():
             p = row["prioridade_acao"]
             cor = CORES_P.get(p[:2],"#8b7eaa")
@@ -1138,14 +1924,14 @@ elif page == "Visao Geral — CNPJs":
                 f'<div><div style="font-size:1.2rem;font-weight:900;color:{cor};">{fmt_num(row["clientes"])}</div>'
                 f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;">cnpjs</div></div>'
                 f'<div><div style="font-size:1.2rem;font-weight:900;color:var(--purple3);">{row["score"]}</div>'
-                f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;">score</div></div>'
+                f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;letter-spacing:.07em;">indice</div></div>'
                 f'</div></div>'
                 f'<div class="mc-bar-bg" style="margin-top:8px;">'
                 f'<div class="hb-fill" style="width:{pct_bar}%;background:{cor};"></div></div>'
                 f'</div>'
             )
             st.markdown(html, unsafe_allow_html=True)
-            if st.button(f"Mailing {p[:10]}", key=f"btn_cnpj_{p[:5]}", use_container_width=True):
+            if st.button(f"Mailing {p[:10]}", key=f"btn_cnpj_{p[:5]}", width="stretch"):
                 st.session_state["mb_tipo"] = p
                 st.session_state["mailing_df"] = None
                 request_page("Mailing Builder")
@@ -1159,9 +1945,9 @@ elif page == "Visao Geral — CNPJs":
             GROUP BY 1 ORDER BY n DESC LIMIT 10
         """)
         fig = px.bar(df_vert.sort_values("n"), x="n", y="v", orientation="h",
-                     text="n", color_discrete_sequence=["#7c3aed"], labels={"n":"CNPJs","v":""})
-        fig.update_traces(marker_color="#7c3aed", textfont_color="#f1eeff", textposition="outside")
-        st.plotly_chart(style_fig(fig, h=360), use_container_width=True)
+                     text="n", color_discrete_sequence=["#5b4aa0"], labels={"n":"CNPJs","v":""})
+        fig.update_traces(marker_color="#5b4aa0", textfont_color="#312944", textposition="outside")
+        st.plotly_chart(style_fig(fig, h=360), width="stretch")
 
         sec_head("Mix de produtos — CNPJs ativos")
         prods = {
@@ -1174,8 +1960,8 @@ elif page == "Visao Geral — CNPJs":
             values=list(prods.values()), names=list(prods.keys()),
             hole=0.55, color_discrete_sequence=PURPLE_SEQ
         )
-        fig2.update_traces(textinfo="percent+label", textfont_color="#f1eeff", textfont_size=10)
-        st.plotly_chart(style_fig(fig2, h=260), use_container_width=True)
+        fig2.update_traces(textinfo="percent+label", textfont_color="#312944", textfont_size=10)
+        st.plotly_chart(style_fig(fig2, h=260), width="stretch")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # SAUDE QSC (compacta, remete ao que já existe)
@@ -1204,12 +1990,13 @@ elif page == "Saude QSC":
                                     dh, pct_txt, bar_pct=pct_bar, color_cls=cc), unsafe_allow_html=True)
 
     sec_head("Motor de priorizacao", "P0 = maxima urgencia · P9 = sem acao prioritaria")
+    st.markdown('<div class="soft-note"><strong>Como ler o indice de prioridade:</strong> score de 0 a 100 calculado a partir da combinacao de risco, oportunidade comercial e urgencia operacional. Quanto maior o indice, maior a prioridade de acao.</div>', unsafe_allow_html=True)
     df_motor = query("""
         SELECT prioridade_acao, explicacao_acao, COUNT(*) AS clientes, ROUND(AVG(score_prioridade),1) AS score
         FROM main.vw_motor_priorizacao_qsc WHERE prioridade_acao != 'P9 - SEM ACAO PRIORITARIA'
         GROUP BY 1,2 ORDER BY score DESC
     """)
-    CORES_P = {"P0":"#f87171","P1":"#e879f9","P2":"#fbbf24","P3":"#a78bfa","P4":"#34d399","P5":"#7c3aed","P6":"#10b981"}
+    CORES_P = {"P0":"#f87171","P1":"#e879f9","P2":"#fbbf24","P3":"#a896db","P4":"#34d399","P5":"#7663c6","P6":"#10b981"}
     for _, row in df_motor.iterrows():
         p = row["prioridade_acao"]; cor = CORES_P.get(p[:2],"#8b7eaa")
         html = (
@@ -1224,11 +2011,11 @@ elif page == "Saude QSC":
             f'<div><div style="font-size:1.25rem;font-weight:900;color:{cor};">{fmt_num(row["clientes"])}</div>'
             f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">clientes</div></div>'
             f'<div><div style="font-size:1.25rem;font-weight:900;color:var(--purple3);">{row["score"]}</div>'
-            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">score</div></div>'
+            f'<div style="font-size:.6rem;color:var(--dim);text-transform:uppercase;">indice</div></div>'
             f'</div></div></div>'
         )
         st.markdown(html, unsafe_allow_html=True)
-        if st.button(f"Mailing — {p}", key=f"qsc_btn_{p[:8]}", use_container_width=True):
+        if st.button(f"Mailing — {p}", key=f"qsc_btn_{p[:8]}", width="stretch"):
             st.session_state["mb_tipo"] = p; st.session_state["mailing_df"] = None
             request_page("Mailing Builder"); st.rerun()
 
@@ -1299,11 +2086,18 @@ elif page == "Comparativos":
                                   default=[k for k in ["Debito Automatico","Biometria Parque","M16 Urgente (Movel)"] if k in kpis_disp])
         if kpi_sel:
             df_plot = df_hist[df_hist["kpi"].isin(kpi_sel)].copy()
-            fig = px.line(df_plot, x="dt_snapshot", y="aderentes", color="kpi",
-                          labels={"dt_snapshot":"Data","aderentes":"Aderentes","kpi":"Indicador"},
-                          color_discrete_sequence=PURPLE_SEQ, markers=True)
-            fig.update_traces(line_width=2, marker_size=7)
-            st.plotly_chart(style_fig(fig, h=380, show_legend=True), use_container_width=True)
+            if df_plot["dt_snapshot"].nunique() > 1:
+                fig = px.line(df_plot, x="dt_snapshot", y="aderentes", color="kpi",
+                              labels={"dt_snapshot":"Data","aderentes":"Aderentes","kpi":"Indicador"},
+                              color_discrete_sequence=PURPLE_SEQ, markers=True)
+                fig.update_traces(line_width=2, marker_size=7)
+                st.plotly_chart(style_fig(fig, h=360, show_legend=True), width="stretch")
+            else:
+                st.markdown('<div class="soft-note"><strong>Historico ainda curto:</strong> por enquanto existe apenas um snapshot carregado. Exibimos abaixo a leitura atual por indicador; a serie temporal sera formada automaticamente a partir das proximas cargas.</div>', unsafe_allow_html=True)
+                fig = px.bar(df_plot.sort_values("aderentes", ascending=False), x="aderentes", y="kpi", orientation="h",
+                             text="aderentes", color_discrete_sequence=["#5b4aa0"], labels={"aderentes":"Aderentes","kpi":"Indicador"})
+                fig.update_traces(textposition="outside")
+                st.plotly_chart(style_fig(fig, h=320, show_legend=False), width="stretch")
 
         # parque movel — histórico
         df_par_hist = query("""
@@ -1322,23 +2116,22 @@ elif page == "Comparativos":
             with col_a:
                 fig2 = go.Figure()
                 fig2.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["total_linhas"],
-                                          name="Total linhas", line=dict(color="#7c3aed", width=2), mode="lines+markers"))
+                                          name="Total linhas", line=dict(color="#7663c6", width=2), mode="lines+markers"))
                 fig2.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["ativas"],
                                           name="Ativas", line=dict(color="#10b981", width=2, dash="dash"), mode="lines+markers"))
-                fig2.update_layout(**plotly_dark(), height=300, showlegend=True, title="Linhas ao longo do tempo")
-                st.plotly_chart(fig2, use_container_width=True)
+                fig2.update_layout(**plotly_dark(), height=300, showlegend=True, title_text="Linhas ao longo do tempo")
+                st.plotly_chart(fig2, width="stretch")
             with col_b:
                 fig3 = go.Figure()
                 fig3.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["cnpjs"],
                                           name="CNPJs", line=dict(color="#e879f9", width=2), mode="lines+markers"))
                 fig3.add_trace(go.Scatter(x=df_par_hist["dt_snapshot"], y=df_par_hist["m_medio"],
                                           name="M medio", yaxis="y2", line=dict(color="#f59e0b", width=2, dash="dot"), mode="lines+markers"))
-                fig3.update_layout(**plotly_dark(), height=300, showlegend=True, title="CNPJs e M medio",
+                fig3.update_layout(**plotly_dark(), height=300, showlegend=True, title_text="CNPJs e M medio",
                                    yaxis2=dict(overlaying="y", side="right", color="#4d4368", gridcolor="transparent"))
-                st.plotly_chart(fig3, use_container_width=True)
+                st.plotly_chart(fig3, width="stretch")
         else:
             st.info("Historico do parque movel estara disponivel apos o segundo snapshot mensal.")
-
 
 # ══════════════════════════════════════════════════════════════════════════════
 # METAS E CERTIFICACAO
@@ -1651,6 +2444,7 @@ elif page == "Metas e Certificacao":
             st.caption("Para atualizar: edite diretamente no MotherDuck com UPDATE main.dim_meta_qsc SET meta_bronze=X WHERE kpi='...'")
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ══════════════════════════════════════════════════════════════════════════════
 # JORNADA POR M
 # ══════════════════════════════════════════════════════════════════════════════
 elif page == "Jornada por M":
@@ -1663,7 +2457,7 @@ elif page == "Jornada por M":
     tl = ['<div style="display:flex;gap:10px;overflow-x:auto;padding:8px 4px 16px;scrollbar-width:thin;scrollbar-color:rgba(124,58,237,.3) transparent;">']
     for _, row in df_m.iterrows():
         f = row["faixa_m"]
-        cor = CORES_F.get("URGENTE","#a78bfa") if "URGENTE" in f else (CORES_F.get("Risco","#a78bfa") if "Risco" in f else "#7c3aed")
+        cor = CORES_F.get("URGENTE","#a896db") if "URGENTE" in f else (CORES_F.get("Risco","#a896db") if "Risco" in f else "#7663c6")
         bg = "rgba(239,68,68,.08)" if "URGENTE" in f else ("rgba(245,158,11,.06)" if "Risco" in f else "rgba(124,58,237,.06)")
         tl.append(
             f'<div style="flex:0 0 auto;min-width:160px;background:{bg};border:1px solid {cor}33;'
@@ -1678,7 +2472,7 @@ elif page == "Jornada por M":
 
     for _, row in df_m.iterrows():
         f = row["faixa_m"]
-        cor = "#f87171" if "URGENTE" in f else ("#fbbf24" if "Risco" in f else "#7c3aed")
+        cor = "#f87171" if "URGENTE" in f else ("#fbbf24" if "Risco" in f else "#7663c6")
         html = (
             f'<div style="background:var(--card);border:1px solid var(--border);border-left:3px solid {cor};'
             f'border-radius:var(--radius);padding:14px 18px;margin-bottom:8px;">'
@@ -1705,17 +2499,18 @@ elif page == "Jornada por M":
     col_a, col_b = st.columns(2, gap="large")
     with col_a:
         fig = px.bar(df_m, x="faixa_m", y="qt_linhas", color="qt_linhas",
-                     color_continuous_scale=["#1a1235","#7c3aed","#c026d3"], text="qt_linhas",
+                     color_continuous_scale=["#e8e0ef","#8d7fbc","#5b4aa0"], text="qt_linhas",
                      labels={"faixa_m":"","qt_linhas":"Linhas"})
         fig.update_layout(xaxis_tickangle=-35, coloraxis_showscale=False)
-        st.plotly_chart(style_fig(fig, h=360), use_container_width=True)
+        st.plotly_chart(style_fig(fig, h=360), width="stretch")
     with col_b:
         fig2 = px.bar(df_m, x="faixa_m", y="fat_total_faixa", color="fat_medio_linha",
-                      color_continuous_scale=["#1a1235","#7c3aed","#c026d3"],
+                      color_continuous_scale=["#e8e0ef","#8d7fbc","#5b4aa0"],
                       labels={"faixa_m":"","fat_total_faixa":"Fat. R$","fat_medio_linha":"Fat./linha"})
         fig2.update_layout(xaxis_tickangle=-35)
-        st.plotly_chart(style_fig(fig2, h=360), use_container_width=True)
+        st.plotly_chart(style_fig(fig2, h=360), width="stretch")
 
+    st.markdown('<div class="chart-help"><strong>M especifico:</strong> cada M representa o mes de vida da linha na carteira. Faixas maiores indicam linhas mais maduras; M16 e um ponto de atencao comercial.</div>', unsafe_allow_html=True)
     m_sel = st.slider("Detalhe por M especifico", 1, 40, 16)
     df_md = query_params("""
         SELECT l.cnpj, c.nm_cliente, c.vertical, c.nm_contato, c.celular, l.nr_telefone,
@@ -1728,7 +2523,7 @@ elif page == "Jornada por M":
     if not df_md.empty:
         st.caption(f"{len(df_md)} linhas no M{m_sel}")
         st.dataframe(df_md[["nm_cliente","vertical","nr_telefone","plano","semaforo","fidelizado","fat_medio","nm_contato","celular"]],
-                     use_container_width=True, hide_index=True)
+                     width="stretch", hide_index=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1748,12 +2543,12 @@ elif page == "Por Vertical":
                COUNT(DISTINCT CASE WHEN COALESCE(c.vl_car_movel,0)+COALESCE(c.vl_car_fixa,0)=0 THEN c.cnpj END) AS sem_car
         FROM main.dim_cliente_hub c WHERE c.situacao_receita='2 - ATIVA'
     """
-    params_seg = []
+    seg_params = []
     if vs != "Todas":
         sql_seg += " AND COALESCE(c.vertical,'Nao informado') = ?"
-        params_seg.append(clean_text_value(vs))
+        seg_params.append(clean_text_value(vs))
     sql_seg += " GROUP BY 1,2 ORDER BY linhas_movel DESC"
-    df_seg = query_params(sql_seg, tuple(params_seg))
+    df_seg = query_params(sql_seg, tuple(seg_params))
 
     c1,c2,c3,c4 = st.columns(4)
     with c1: st.markdown(metric_card("Clientes", fmt_num(df_seg["clientes"].sum())), unsafe_allow_html=True)
@@ -1764,7 +2559,7 @@ elif page == "Por Vertical":
     col_l, col_r = st.columns([2,1], gap="large")
     with col_l:
         sec_head("Por vertical x atividade")
-        st.dataframe(df_seg, use_container_width=True, hide_index=True)
+        st.dataframe(df_seg, width="stretch", hide_index=True)
     with col_r:
         if vs != "Todas":
             sec_head(vs)
@@ -1784,7 +2579,7 @@ elif page == "Por Vertical":
                     f'<div class="clc-name">{r["nm_cliente"]}</div>'
                     f'<div class="clc-sector">{r["cidade"] or "—"}</div>'
                     f'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:6px;">'
-                    f'<span style="background:rgba(124,58,237,.1);color:#a78bfa;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:99px;">{r["linhas"]} linhas</span>'
+                    f'<span style="background:rgba(124,58,237,.1);color:#a896db;font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:99px;">{r["linhas"]} linhas</span>'
                     f'{bl_b}'
                     f'<span style="background:rgba(239,68,68,.1);color:{cor};font-size:.62rem;font-weight:800;padding:2px 8px;border-radius:99px;">{r["car"]}</span>'
                     f'</div>'
@@ -1795,9 +2590,9 @@ elif page == "Por Vertical":
         else:
             df_top = df_seg.groupby("vertical").agg(clientes=("clientes","sum"),linhas=("linhas_movel","sum")).reset_index().sort_values("linhas",ascending=False).head(12)
             fig = px.bar(df_top, x="linhas", y="vertical", orientation="h", color="clientes",
-                         color_continuous_scale=["#1a1235","#7c3aed"], text="linhas", labels={"linhas":"Linhas","vertical":""})
+                         color_continuous_scale=["#1a1235","#7663c6"], text="linhas", labels={"linhas":"Linhas","vertical":""})
             fig.update_layout(coloraxis_showscale=False)
-            st.plotly_chart(style_fig(fig, h=460), use_container_width=True)
+            st.plotly_chart(style_fig(fig, h=460), width="stretch")
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1808,7 +2603,7 @@ elif page == "Alertas da Semana":
 
     df_al = query("SELECT tipo_alerta, COUNT(*) AS q, COUNT(DISTINCT cnpj) AS c FROM main.vw_alertas_semana GROUP BY 1 ORDER BY 1")
     CORES_AL = {"M16 URGENTE":("cr","#f87171"),"SAFRA TFP M5":("ca","#fbbf24"),
-                "RISCO EARLY CHURN":("cp","#a78bfa"),"BIOMETRIA PENDENTE":("cs","#34d399")}
+                "RISCO EARLY CHURN":("cp","#a896db"),"BIOMETRIA PENDENTE":("cs","#34d399")}
     TIPS_AL = {
         "M16 URGENTE":"M=16 e o ultimo ciclo antes da linha virar M17 e sair do parque fidelizado QSC.",
         "SAFRA TFP M5":"M=5 e o gatilho de cobranca da 3a fatura — janela curta para pontuar TFP.",
@@ -1817,11 +2612,11 @@ elif page == "Alertas da Semana":
     }
     cols = st.columns(len(df_al))
     for i, (_, r) in enumerate(df_al.iterrows()):
-        cc, cor = CORES_AL.get(r["tipo_alerta"],("cp","#a78bfa"))
+        cc, cor = CORES_AL.get(r["tipo_alerta"],("cp","#a896db"))
         with cols[i]:
             st.markdown(metric_card(r["tipo_alerta"], fmt_num(r["q"]),
                                     sub=TIPS_AL.get(r["tipo_alerta"],""), color_cls=cc), unsafe_allow_html=True)
-            if st.button("Abrir mailing", key=f"al_btn_{i}", use_container_width=True):
+            if st.button("Abrir mailing", key=f"al_btn_{i}", width="stretch"):
                 st.session_state["mb_tipo"] = r["tipo_alerta"]; st.session_state["mailing_df"] = None
                 request_page("Mailing Builder"); st.rerun()
 
@@ -1832,12 +2627,12 @@ elif page == "Alertas da Semana":
     alert_params = []
     if tipo_sel != "Todos":
         sql_alertas += " WHERE tipo_alerta = ?"
-        alert_params.append(clean_text_value(tipo_sel))
+        alert_params.append(tipo_sel)
     sql_alertas += " ORDER BY m DESC LIMIT 500"
     df_det = query_params(sql_alertas, tuple(alert_params))
     if not df_det.empty:
         st.caption(f"{len(df_det)} registros")
-        st.dataframe(df_det, use_container_width=True, hide_index=True)
+        st.dataframe(df_det, width="stretch", hide_index=True)
         csv = df_det.to_csv(index=False, sep=";", encoding="utf-8-sig")
         st.download_button("Exportar CSV", csv.encode("utf-8-sig"), "alertas.csv", mime="text/csv")
 
@@ -1850,29 +2645,29 @@ elif page == "Oportunidades":
 
     df_op = query("SELECT oportunidade_principal, COUNT(*) AS clientes, SUM(COALESCE(qt_movel,0)) AS linhas FROM main.vw_oportunidades_comerciais GROUP BY 1 ORDER BY clientes DESC")
     cols = st.columns(len(df_op))
-    CORES_OP = {"CONVERGENCIA FIXA+MOVEL":"#7c3aed","DIGITAL — OFFICE/WORKSPACE":"#c026d3","APARELHOS":"#f59e0b","RENOVACAO MOVEL":"#10b981","MANUTENCAO":"#4d4368"}
+    CORES_OP = {"CONVERGENCIA FIXA+MOVEL":"#7663c6","DIGITAL — OFFICE/WORKSPACE":"#9f54c1","APARELHOS":"#f59e0b","RENOVACAO MOVEL":"#10b981","MANUTENCAO":"#4d4368"}
     for i, (_, r) in enumerate(df_op.iterrows()):
-        cor = CORES_OP.get(r["oportunidade_principal"],"#7c3aed")
+        cor = CORES_OP.get(r["oportunidade_principal"],"#7663c6")
         with cols[i]:
             st.markdown(f'<div class="mc cp" style="--border-top-color:{cor};">'
                         f'<div class="mc-label">{r["oportunidade_principal"]}</div>'
                         f'<div class="mc-value">{fmt_num(r["clientes"])}</div>'
                         f'<div class="mc-sub">{fmt_num(r["linhas"])} linhas</div></div>', unsafe_allow_html=True)
-            if st.button("Mailing", key=f"op_btn_{i}", use_container_width=True):
+            if st.button("Mailing", key=f"op_btn_{i}", width="stretch"):
                 st.session_state["mb_tipo"] = r["oportunidade_principal"]; st.session_state["mailing_df"] = None
                 request_page("Mailing Builder"); st.rerun()
 
     op_sel = st.selectbox("Filtrar", ["Todas"] + df_op["oportunidade_principal"].tolist())
-    sql_oportunidades = "SELECT cnpj, nm_cliente, vertical, nm_contato, celular, email, cidade, qt_movel, qt_linhas AS linhas_ativas, ROUND(m_medio,1) AS m_medio, ROUND(fat_total,2) AS fat_total, digital_1, primeira_oferta, oportunidade_principal FROM main.vw_oportunidades_comerciais"
+    sql_op = "SELECT cnpj, nm_cliente, vertical, nm_contato, celular, email, cidade, qt_movel, qt_linhas AS linhas_ativas, ROUND(m_medio,1) AS m_medio, ROUND(fat_total,2) AS fat_total, digital_1, primeira_oferta, oportunidade_principal FROM main.vw_oportunidades_comerciais"
     op_params = []
     if op_sel != "Todas":
-        sql_oportunidades += " WHERE oportunidade_principal = ?"
-        op_params.append(clean_text_value(op_sel))
-    sql_oportunidades += " ORDER BY qt_movel DESC LIMIT 500"
-    df_det_op = query_params(sql_oportunidades, tuple(op_params))
+        sql_op += " WHERE oportunidade_principal = ?"
+        op_params.append(op_sel)
+    sql_op += " ORDER BY qt_movel DESC LIMIT 500"
+    df_det_op = query_params(sql_op, tuple(op_params))
     if not df_det_op.empty:
         st.caption(f"{len(df_det_op)} clientes")
-        st.dataframe(df_det_op, use_container_width=True, hide_index=True)
+        st.dataframe(df_det_op, width="stretch", hide_index=True)
         csv = df_det_op.to_csv(index=False, sep=";", encoding="utf-8-sig")
         st.download_button("Exportar CSV", csv.encode("utf-8-sig"), "oportunidades.csv", mime="text/csv")
 
@@ -1887,16 +2682,16 @@ elif page == "Busca por Cliente":
     with col_inp: busca = st.text_input("CNPJ ou nome", placeholder="12345678000199 ou Nome da Empresa", label_visibility="collapsed")
     with col_btn:
         st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
-        pesquisar = st.button("Buscar", use_container_width=True)
+        pesquisar = st.button("Buscar", width="stretch")
 
     if busca or pesquisar:
-        termo = clean_text_value(busca.strip().replace(".","").replace("/","").replace("-",""))
-        if termo.isdigit() and len(termo)>=8:
-            where = "c.cnpj LIKE ?"
-            busca_param = f"%{termo}%"
+        termo = busca.strip().replace(".","").replace("/","").replace("-","")
+        if termo.isdigit() and len(termo) >= 8:
+            search_where = "c.cnpj LIKE ?"
+            search_param = f"%{termo}%"
         else:
-            where = "UPPER(c.nm_cliente) LIKE ?"
-            busca_param = f"%{termo.upper()}%"
+            search_where = "UPPER(c.nm_cliente) LIKE ?"
+            search_param = f"%{termo.upper()}%"
         df_res = query_params(f"""
             SELECT c.cnpj, c.nm_cliente, c.vertical, c.atividade_economica, c.nm_contato,
                    c.celular, c.email, c.cidade, c.situacao_receita,
@@ -1906,8 +2701,8 @@ elif page == "Busca por Cliente":
                    COALESCE(c.vl_car_movel,0) AS car_movel, COALESCE(c.vl_car_fixa,0) AS car_fixa,
                    c.flg_biometrado, c.primeira_oferta, c.segunda_oferta, c.terceira_oferta,
                    c.digital_1, c.digital_2, c.digital_3, c.rec_aparelhos, c.propensao_avancada
-            FROM main.dim_cliente_hub c WHERE {where} ORDER BY c.qt_movel DESC LIMIT 20
-        """, (busca_param,))
+            FROM main.dim_cliente_hub c WHERE {search_where} ORDER BY c.qt_movel DESC LIMIT 20
+        """, (search_param,))
         if df_res.empty:
             st.markdown("<div class='empty'><div class='empty-text'>Nenhum cliente encontrado.</div></div>", unsafe_allow_html=True)
         else:
@@ -1917,15 +2712,15 @@ elif page == "Busca por Cliente":
             else:
                 cli = df_res.iloc[0]
 
-            cnpj_cli = clean_text_value(cli["cnpj"])
+            cnpj_cli = cli["cnpj"]
             df_linhas = query_params("""
                 SELECT nr_telefone, plano, m, semaforo, fidelizado, aparelho_modelo,
                        ROUND(fat_medio,2) AS fat_medio, flg_m16_urgente, flg_elegivel_comercial, situacao_receita
                 FROM main.fato_linha_movel
                 WHERE cnpj=? AND dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
                 ORDER BY m DESC
-            """, (cnpj_cli,))
-            df_qsc_cli = query_params("SELECT * FROM main.dim_qsc_cliente WHERE cnpj=?", (cnpj_cli,))
+            """, (str(cnpj_cli),))
+            df_qsc_cli = query_params("SELECT * FROM main.dim_qsc_cliente WHERE cnpj=?", (str(cnpj_cli),))
 
             tem_car = cli["car_movel"]+cli["car_fixa"] > 0
             bio = cli["flg_biometrado"] == "1"
@@ -1992,7 +2787,7 @@ elif page == "Busca por Cliente":
                     with cc1: st.markdown(metric_card("Ativas", fmt_num(len(ativas))), unsafe_allow_html=True)
                     with cc2: st.markdown(metric_card("M medio", round(ativas["m"].mean(),1) if not ativas.empty else "—"), unsafe_allow_html=True)
                     with cc3: st.markdown(metric_card("Fat. mensal", fmt_brl(ativas["fat_medio"].sum())), unsafe_allow_html=True)
-                    st.dataframe(df_linhas[["nr_telefone","plano","m","semaforo","fidelizado","aparelho_modelo","fat_medio","flg_m16_urgente","flg_elegivel_comercial"]], use_container_width=True, hide_index=True, height=300)
+                    st.dataframe(df_linhas[["nr_telefone","plano","m","semaforo","fidelizado","aparelho_modelo","fat_medio","flg_m16_urgente","flg_elegivel_comercial"]], width="stretch", hide_index=True, height=300)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # MAILING BUILDER v3
@@ -2068,7 +2863,7 @@ elif page == "Mailing Builder":
         "Tem Fixa — Comprar Movel": {
             "desc": "Clientes com banda larga ou voz fixa mas sem linha movel — crossell convergencia",
             "icon": "●",
-            "cor": "#c026d3",
+            "cor": "#9f54c1",
             "join_op": "",
             "where_extra": "AND (COALESCE(c.qt_banda_larga,0) > 0 OR COALESCE(c.qt_linha_fixa,0) > 0) AND COALESCE(c.qt_movel,0) = 0",
             "order_by": "c.qt_banda_larga DESC",
@@ -2077,7 +2872,7 @@ elif page == "Mailing Builder":
         "Tem Movel — Comprar Fixa": {
             "desc": "Clientes com movel mas sem fixa ou banda larga — crossell convergencia",
             "icon": "●",
-            "cor": "#a78bfa",
+            "cor": "#a896db",
             "join_op": "",
             "where_extra": "AND COALESCE(c.qt_movel,0) > 0 AND COALESCE(c.qt_banda_larga,0) = 0 AND COALESCE(c.qt_linha_fixa,0) = 0",
             "order_by": "c.qt_movel DESC",
@@ -2086,7 +2881,7 @@ elif page == "Mailing Builder":
         "Licenciamento Digital": {
             "desc": "Clientes com propensao a Microsoft 365 ou Google Workspace identificada pelo mapa parque",
             "icon": "◆",
-            "cor": "#7c3aed",
+            "cor": "#7663c6",
             "join_op": "",
             "where_extra": "AND (c.digital_1 IS NOT NULL OR c.digital_2 IS NOT NULL OR c.digital_3 IS NOT NULL)",
             "order_by": "c.qt_movel DESC",
@@ -2096,15 +2891,15 @@ elif page == "Mailing Builder":
         "P0 - RECUPERAR INVASAO": {"desc":"Cliente invadido","icon":"●","cor":"#f87171","join_op":"LEFT JOIN main.vw_motor_priorizacao_qsc mp2 ON c.cnpj=mp2.cnpj","where_extra":"AND mp.prioridade_acao='P0 - RECUPERAR INVASAO'","order_by":"c.qt_movel DESC","urgency":"urgente"},
         "P1 - COMBO CAR+DEBITO+BIOMETRIA": {"desc":"Combo tripla","icon":"●","cor":"#e879f9","join_op":"","where_extra":"AND mp.prioridade_acao='P1 - COMBO CAR+DEBITO+BIOMETRIA'","order_by":"c.qt_movel DESC","urgency":"urgente"},
         "P2 - BLINDAR M CRITICO SEM DEBITO": {"desc":"M1-9 sem debito","icon":"●","cor":"#fbbf24","join_op":"","where_extra":"AND mp.prioridade_acao='P2 - BLINDAR M CRITICO SEM DEBITO'","order_by":"c.qt_movel DESC","urgency":"urgente"},
-        "P3 - CAR BAIXO RECUPERAVEL": {"desc":"CAR < 30 dias","icon":"●","cor":"#a78bfa","join_op":"","where_extra":"AND mp.prioridade_acao='P3 - CAR BAIXO RECUPERAVEL'","order_by":"c.qt_movel DESC","urgency":"atencao"},
+        "P3 - CAR BAIXO RECUPERAVEL": {"desc":"CAR < 30 dias","icon":"●","cor":"#a896db","join_op":"","where_extra":"AND mp.prioridade_acao='P3 - CAR BAIXO RECUPERAVEL'","order_by":"c.qt_movel DESC","urgency":"atencao"},
         "P4 - DEBITO AUTOMATICO FACIL": {"desc":"Sem CAR, verde","icon":"●","cor":"#34d399","join_op":"","where_extra":"AND mp.prioridade_acao='P4 - DEBITO AUTOMATICO FACIL'","order_by":"c.qt_movel DESC","urgency":"positivo"},
-        "P5 - BIOMETRIA PENDENTE": {"desc":"Sem CAR, sem biometria","icon":"●","cor":"#7c3aed","join_op":"","where_extra":"AND mp.prioridade_acao='P5 - BIOMETRIA PENDENTE'","order_by":"c.qt_movel DESC","urgency":"positivo"},
+        "P5 - BIOMETRIA PENDENTE": {"desc":"Sem CAR, sem biometria","icon":"●","cor":"#7663c6","join_op":"","where_extra":"AND mp.prioridade_acao='P5 - BIOMETRIA PENDENTE'","order_by":"c.qt_movel DESC","urgency":"positivo"},
         "P6 - CROSS-SELL DIGITAL PREMIUM": {"desc":"100% qualificado + propensao","icon":"●","cor":"#10b981","join_op":"","where_extra":"AND mp.prioridade_acao='P6 - CROSS-SELL DIGITAL PREMIUM'","order_by":"c.qt_movel DESC","urgency":"positivo"},
         # --- Alertas ---
         "M16 URGENTE": {"desc":"Linhas M16","icon":"▲","cor":"#f87171","join_op":"JOIN main.fato_linha_movel l16 ON c.cnpj=l16.cnpj AND l16.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l16.flg_m16_urgente='SIM'","where_extra":"","order_by":"c.qt_movel DESC","urgency":"urgente"},
         "SAFRA TFP M5": {"desc":"Linhas M5","icon":"▲","cor":"#fbbf24","join_op":"JOIN main.fato_linha_movel l5 ON c.cnpj=l5.cnpj AND l5.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l5.flg_safra_tfp='SIM'","where_extra":"","order_by":"c.qt_movel DESC","urgency":"atencao"},
-        "CONVERGENCIA FIXA+MOVEL": {"desc":"Crossell fixa x movel","icon":"●","cor":"#7c3aed","join_op":"","where_extra":"AND (c.rec_movel LIKE '%Aquisição%' OR c.rec_movel LIKE '%Aquisicao%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
-        "DIGITAL — OFFICE/WORKSPACE": {"desc":"Propensao digital","icon":"◆","cor":"#c026d3","join_op":"","where_extra":"AND (c.digital_1 LIKE '%365%' OR c.digital_1 LIKE '%Workspace%' OR c.digital_2 LIKE '%365%' OR c.digital_2 LIKE '%Workspace%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
+        "CONVERGENCIA FIXA+MOVEL": {"desc":"Crossell fixa x movel","icon":"●","cor":"#7663c6","join_op":"","where_extra":"AND (c.rec_movel LIKE '%Aquisição%' OR c.rec_movel LIKE '%Aquisicao%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
+        "DIGITAL — OFFICE/WORKSPACE": {"desc":"Propensao digital","icon":"◆","cor":"#9f54c1","join_op":"","where_extra":"AND (c.digital_1 LIKE '%365%' OR c.digital_1 LIKE '%Workspace%' OR c.digital_2 LIKE '%365%' OR c.digital_2 LIKE '%Workspace%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
         "Todos": {"desc":"Carteira completa","icon":"◆","cor":"#8b7eaa","join_op":"","where_extra":"","order_by":"c.qt_movel DESC","urgency":"neutro"},
     }
 
@@ -2190,20 +2985,21 @@ elif page == "Mailing Builder":
     sql_params = []
 
     if situacao != "Todos":
-        wheres.append("c.situacao_receita=?")
-        sql_params.append(clean_text_value(situacao))
+        wheres.append("c.situacao_receita = ?")
+        sql_params.append(situacao)
     else:
         wheres.append("c.situacao_receita='2 - ATIVA'")
 
     if semaforo != "Todos":
-        wheres.append("la.semaforo_predominante=?")
-        sql_params.append(clean_text_value(semaforo))
+        wheres.append("la.semaforo_predominante = ?")
+        sql_params.append(semaforo)
 
     if verts_mb:
-        in_clause, in_params = build_in_clause("COALESCE(c.vertical,'Nao informado')", verts_mb)
-        if in_clause:
-            wheres.append(in_clause)
-            sql_params.extend(in_params)
+        verts_limpas = [clean_text_value(v) for v in verts_mb if clean_text_value(v)]
+        if verts_limpas:
+            placeholders = ",".join(["?"] * len(verts_limpas))
+            wheres.append(f"COALESCE(c.vertical,'Nao informado') IN ({placeholders})")
+            sql_params.extend(verts_limpas)
 
     wheres.append("COALESCE(c.qt_movel,0) BETWEEN ? AND ?")
     sql_params.extend([int(min_linhas), int(max_linhas)])
@@ -2242,13 +3038,10 @@ elif page == "Mailing Builder":
         if dig_conditions:
             wheres.append("(" + " OR ".join(dig_conditions) + ")")
 
-    # WHERE da campanha especifica
+    # WHERE da campanha especifica vem de configuracao interna, nao da interface
     where_camp = cfg.get("where_extra","")
     if where_camp:
-        where_camp = where_camp.strip()
-        if where_camp.upper().startswith("AND "):
-            where_camp = where_camp[4:].strip()
-        wheres.append(where_camp)
+        wheres.append(where_camp.lstrip("AND "))
 
     where_sql = " AND ".join(wheres)
     join_op   = cfg.get("join_op","")
@@ -2257,8 +3050,8 @@ elif page == "Mailing Builder":
     # ── Gerar mailing ─────────────────────────────────────────────────────────
     col_g, col_r2 = st.columns([1,3])
     with col_g:
-        gerar = st.button("Gerar mailing", use_container_width=True, key="mb_gerar")
-        if st.button("Limpar", use_container_width=True, key="mb_clear"):
+        gerar = st.button("Gerar mailing", width="stretch", key="mb_gerar")
+        if st.button("Limpar", width="stretch", key="mb_clear"):
             st.session_state["mailing_df"] = None
             st.rerun()
 
@@ -2305,7 +3098,8 @@ elif page == "Mailing Builder":
         ORDER BY {order_by} LIMIT ?
         """
         try:
-            df_mail = query_params(sql, tuple(sql_params) + (int(limite),))
+            mailing_params = tuple(sql_params + [int(limite)])
+            df_mail = query_params(sql, mailing_params)
             st.session_state["mailing_df"] = df_mail
         except Exception as e:
             st.error(f"Erro: {e}")
@@ -2336,7 +3130,7 @@ elif page == "Mailing Builder":
                                   "m_medio","semaforo_predominante","primeira_oferta",
                                   "digital_1","cap_credito_aparelho","prioridade_acao_qsc"]
                      if c in df_mail.columns]
-        st.dataframe(df_mail[cols_prev], use_container_width=True, hide_index=True, height=280)
+        st.dataframe(df_mail[cols_prev], width="stretch", hide_index=True, height=280)
 
         # ── Exportar ──────────────────────────────────────────────────────────
         sec_head("Exportar", "todas as 50+ colunas do mapa parque incluidas em qualquer formato")
@@ -2359,7 +3153,7 @@ elif page == "Mailing Builder":
             csv_mc = df_mc.to_csv(index=False, encoding="utf-8-sig")
             st.download_button("Baixar Mailchimp CSV", data=csv_mc.encode("utf-8-sig"),
                                file_name=f"mailchimp_{tipo_camp[:20].replace(' ','_')}.csv",
-                               mime="text/csv", use_container_width=True)
+                               mime="text/csv", width="stretch")
             st.caption(f"{df_mc['Email Address'].notna().sum()} com email · {len(df_mc.columns)} colunas")
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2376,7 +3170,7 @@ elif page == "Mailing Builder":
             csv_3c = df_3c.to_csv(index=False, sep=";", encoding="utf-8-sig")
             st.download_button("Baixar 3CPlus CSV", data=csv_3c.encode("utf-8-sig"),
                                file_name=f"3cplus_{tipo_camp[:20].replace(' ','_')}.csv",
-                               mime="text/csv", use_container_width=True)
+                               mime="text/csv", width="stretch")
             st.caption(f"{(df_3c['TELEFONE'].str.len() >= 10).sum()} com tel · {len(df_3c.columns)} colunas")
             st.markdown('</div>', unsafe_allow_html=True)
 
@@ -2392,7 +3186,7 @@ elif page == "Mailing Builder":
             csv_sms = df_sms_test.to_csv(index=False, sep=";", encoding="utf-8-sig")
             st.download_button("Baixar SMS Teste (50)", data=csv_sms.encode("utf-8-sig"),
                                file_name=f"sms_teste_{tipo_camp[:15].replace(' ','_')}.csv",
-                               mime="text/csv", use_container_width=True)
+                               mime="text/csv", width="stretch")
             abord_sms = ABORDAGENS.get(tipo_camp, {}).get("sms","")
             if abord_sms:
                 st.caption("Template sugerido:")
@@ -2408,7 +3202,7 @@ elif page == "Mailing Builder":
             csv_custom = df_custom.to_csv(index=False, sep=";", encoding="utf-8-sig")
             st.download_button("Baixar CSV completo", data=csv_custom.encode("utf-8-sig"),
                                file_name=f"mailing_{tipo_camp[:20].replace(' ','_')}.csv",
-                               mime="text/csv", use_container_width=True)
+                               mime="text/csv", width="stretch")
             st.caption(f"{len(df_custom)} registros · {len(df_custom.columns)} colunas")
             st.markdown('</div>', unsafe_allow_html=True)
 
