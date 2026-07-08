@@ -2885,12 +2885,12 @@ elif page == "Mailing Builder":
         },
         # --- 6 PERFIS NOVOS ---
         "Aptos para Aparelho": {
-            "desc": "Clientes com credito pre-aprovado para troca de aparelho, classificados por R$ disponivel",
+            "desc": "Clientes com sinal de capacidade de pagamento ou recomendacao de aparelho",
             "icon": "▲",
             "cor": "#f59e0b",
             "join_op": "",
-            "where_extra": "AND c.rec_aparelhos LIKE '%capacidade de pagamento%'",
-            "order_by": "cap_credito_aparelho DESC",
+            "where_extra": "AND (COALESCE(c.rec_aparelhos,'') ILIKE '%capacidade de pagamento%' OR COALESCE(c.rec_aparelhos,'') ILIKE '%aparelho%' OR TRY_CAST(REGEXP_EXTRACT(COALESCE(c.rec_aparelhos,''),'capacidade de pagamento de R\\$([0-9]+)',1) AS DOUBLE) > 0)",
+            "order_by": "cap_credito_aparelho DESC NULLS LAST, c.qt_movel DESC",
             "urgency": "oportunidade",
         },
         "Reducao de Custo": {
@@ -2898,7 +2898,7 @@ elif page == "Mailing Builder":
             "icon": "▼",
             "cor": "#10b981",
             "join_op": "",
-            "where_extra": "AND (c.recomendacao_vivo LIKE '%Renovacao%' OR c.recomendacao_vivo LIKE '%Renovação%' OR c.rec_movel LIKE '%Blindagem%')",
+            "where_extra": "AND (COALESCE(c.recomendacao_vivo,'') ILIKE '%renova%' OR COALESCE(c.recomendacao_vivo,'') ILIKE '%redu%' OR COALESCE(c.recomendacao_vivo,'') ILIKE '%econom%' OR COALESCE(c.rec_movel,'') ILIKE '%blindag%' OR COALESCE(c.rec_movel,'') ILIKE '%migra%')",
             "order_by": "c.qt_movel DESC",
             "urgency": "atencao",
         },
@@ -2907,7 +2907,7 @@ elif page == "Mailing Builder":
             "icon": "◆",
             "cor": "#38bdf8",
             "join_op": "",
-            "where_extra": "AND (c.propensao_avancada IS NOT NULL OR c.recomendacao_vivo LIKE '%GB%' OR c.recomendacao_vivo LIKE '%Mbps%')",
+            "where_extra": "AND (NULLIF(TRIM(COALESCE(c.propensao_avancada,'')),'') IS NOT NULL OR COALESCE(c.recomendacao_vivo,'') ILIKE '%GB%' OR COALESCE(c.recomendacao_vivo,'') ILIKE '%Mbps%' OR COALESCE(c.recomendacao_vivo,'') ILIKE '%veloc%' OR COALESCE(c.recomendacao_vivo,'') ILIKE '%upgrade%')",
             "order_by": "c.qt_movel DESC",
             "urgency": "oportunidade",
         },
@@ -2934,12 +2934,12 @@ elif page == "Mailing Builder":
             "icon": "◆",
             "cor": "#7663c6",
             "join_op": "",
-            "where_extra": "AND (c.digital_1 IS NOT NULL OR c.digital_2 IS NOT NULL OR c.digital_3 IS NOT NULL)",
+            "where_extra": "AND (NULLIF(TRIM(COALESCE(c.digital_1,'')),'') IS NOT NULL OR NULLIF(TRIM(COALESCE(c.digital_2,'')),'') IS NOT NULL OR NULLIF(TRIM(COALESCE(c.digital_3,'')),'') IS NOT NULL OR COALESCE(c.recomendacao_vivo,'') ILIKE '%365%' OR COALESCE(c.recomendacao_vivo,'') ILIKE '%workspace%')",
             "order_by": "c.qt_movel DESC",
             "urgency": "oportunidade",
         },
         # --- QSC ---
-        "P0 - RECUPERAR INVASAO": {"desc":"Cliente invadido","icon":"●","cor":"#f87171","join_op":"LEFT JOIN main.vw_motor_priorizacao_qsc mp2 ON c.cnpj=mp2.cnpj","where_extra":"AND mp.prioridade_acao='P0 - RECUPERAR INVASAO'","order_by":"c.qt_movel DESC","urgency":"urgente"},
+        "P0 - RECUPERAR INVASAO": {"desc":"Cliente invadido","icon":"●","cor":"#f87171","join_op":"","where_extra":"AND mp.prioridade_acao='P0 - RECUPERAR INVASAO'","order_by":"c.qt_movel DESC","urgency":"urgente"},
         "P1 - COMBO CAR+DEBITO+BIOMETRIA": {"desc":"Combo tripla","icon":"●","cor":"#e879f9","join_op":"","where_extra":"AND mp.prioridade_acao='P1 - COMBO CAR+DEBITO+BIOMETRIA'","order_by":"c.qt_movel DESC","urgency":"urgente"},
         "P2 - BLINDAR M CRITICO SEM DEBITO": {"desc":"M1-9 sem debito","icon":"●","cor":"#fbbf24","join_op":"","where_extra":"AND mp.prioridade_acao='P2 - BLINDAR M CRITICO SEM DEBITO'","order_by":"c.qt_movel DESC","urgency":"urgente"},
         "P3 - CAR BAIXO RECUPERAVEL": {"desc":"CAR < 30 dias","icon":"●","cor":"#a896db","join_op":"","where_extra":"AND mp.prioridade_acao='P3 - CAR BAIXO RECUPERAVEL'","order_by":"c.qt_movel DESC","urgency":"atencao"},
@@ -2947,10 +2947,10 @@ elif page == "Mailing Builder":
         "P5 - BIOMETRIA PENDENTE": {"desc":"Sem CAR, sem biometria","icon":"●","cor":"#7663c6","join_op":"","where_extra":"AND mp.prioridade_acao='P5 - BIOMETRIA PENDENTE'","order_by":"c.qt_movel DESC","urgency":"positivo"},
         "P6 - CROSS-SELL DIGITAL PREMIUM": {"desc":"100% qualificado + propensao","icon":"●","cor":"#10b981","join_op":"","where_extra":"AND mp.prioridade_acao='P6 - CROSS-SELL DIGITAL PREMIUM'","order_by":"c.qt_movel DESC","urgency":"positivo"},
         # --- Alertas ---
-        "M16 URGENTE": {"desc":"Linhas M16","icon":"▲","cor":"#f87171","join_op":"JOIN main.fato_linha_movel l16 ON c.cnpj=l16.cnpj AND l16.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l16.flg_m16_urgente='SIM'","where_extra":"","order_by":"c.qt_movel DESC","urgency":"urgente"},
-        "SAFRA TFP M5": {"desc":"Linhas M5","icon":"▲","cor":"#fbbf24","join_op":"JOIN main.fato_linha_movel l5 ON c.cnpj=l5.cnpj AND l5.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l5.flg_safra_tfp='SIM'","where_extra":"","order_by":"c.qt_movel DESC","urgency":"atencao"},
-        "CONVERGENCIA FIXA+MOVEL": {"desc":"Crossell fixa x movel","icon":"●","cor":"#7663c6","join_op":"","where_extra":"AND (c.rec_movel LIKE '%Aquisição%' OR c.rec_movel LIKE '%Aquisicao%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
-        "DIGITAL — OFFICE/WORKSPACE": {"desc":"Propensao digital","icon":"◆","cor":"#9f54c1","join_op":"","where_extra":"AND (c.digital_1 LIKE '%365%' OR c.digital_1 LIKE '%Workspace%' OR c.digital_2 LIKE '%365%' OR c.digital_2 LIKE '%Workspace%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
+        "M16 URGENTE": {"desc":"Linhas M16","icon":"▲","cor":"#f87171","join_op":"","where_extra":"AND EXISTS (SELECT 1 FROM main.fato_linha_movel l16 WHERE l16.cnpj=c.cnpj AND l16.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l16.flg_m16_urgente='SIM')","order_by":"c.qt_movel DESC","urgency":"urgente"},
+        "SAFRA TFP M5": {"desc":"Linhas M5","icon":"▲","cor":"#fbbf24","join_op":"","where_extra":"AND EXISTS (SELECT 1 FROM main.fato_linha_movel l5 WHERE l5.cnpj=c.cnpj AND l5.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel) AND l5.flg_safra_tfp='SIM')","order_by":"c.qt_movel DESC","urgency":"atencao"},
+        "CONVERGENCIA FIXA+MOVEL": {"desc":"Crossell fixa x movel","icon":"●","cor":"#7663c6","join_op":"","where_extra":"AND (COALESCE(c.rec_movel,'') ILIKE '%aquisi%' OR (COALESCE(c.qt_movel,0)>0 AND COALESCE(c.qt_banda_larga,0)=0 AND COALESCE(c.qt_linha_fixa,0)=0) OR ((COALESCE(c.qt_banda_larga,0)>0 OR COALESCE(c.qt_linha_fixa,0)>0) AND COALESCE(c.qt_movel,0)=0))","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
+        "DIGITAL — OFFICE/WORKSPACE": {"desc":"Propensao digital","icon":"◆","cor":"#9f54c1","join_op":"","where_extra":"AND (COALESCE(c.digital_1,'') ILIKE '%365%' OR COALESCE(c.digital_1,'') ILIKE '%workspace%' OR COALESCE(c.digital_2,'') ILIKE '%365%' OR COALESCE(c.digital_2,'') ILIKE '%workspace%' OR COALESCE(c.digital_3,'') ILIKE '%365%' OR COALESCE(c.digital_3,'') ILIKE '%workspace%')","order_by":"c.qt_movel DESC","urgency":"oportunidade"},
         "Todos": {"desc":"Carteira completa","icon":"◆","cor":"#8b7eaa","join_op":"","where_extra":"","order_by":"c.qt_movel DESC","urgency":"neutro"},
     }
 
@@ -2962,13 +2962,24 @@ elif page == "Mailing Builder":
         "Alertas / Outros": ["M16 URGENTE","SAFRA TFP M5","CONVERGENCIA FIXA+MOVEL","DIGITAL — OFFICE/WORKSPACE","Todos"],
     }
 
-    sec_head("Selecione a campanha", "clique em um grupo para expandir")
+    sec_head("Selecione a campanha", "escolha o grupo e depois a campanha que deseja gerar")
     tipo_camp_default = st.session_state.get("mb_tipo", "Todos")
 
-    grupo_sel = st.radio("Grupo", list(GRUPOS.keys()), horizontal=True, key="mb_grupo")
+    grupos_lista = list(GRUPOS.keys())
+    grupo_default = next(
+        (g for g, itens in GRUPOS.items() if tipo_camp_default in itens),
+        "Alertas / Outros",
+    )
+    grupo_sel = st.radio(
+        "Grupo",
+        grupos_lista,
+        index=grupos_lista.index(grupo_default),
+        horizontal=True,
+        key="mb_grupo",
+    )
     opcoes_grupo = GRUPOS[grupo_sel]
 
-    # carrossel de campanha
+    # carrossel de campanha (visual)
     slides_camp = []
     for tc in opcoes_grupo:
         cfg = TIPOS_CAMP.get(tc, TIPOS_CAMP["Todos"])
@@ -2979,9 +2990,14 @@ elif page == "Mailing Builder":
         })
     carousel_html(slides_camp, "car_camp_sel")
 
-    tipo_camp = st.selectbox("Ou selecione direto", list(TIPOS_CAMP.keys()),
-                              index=list(TIPOS_CAMP.keys()).index(tipo_camp_default)
-                              if tipo_camp_default in TIPOS_CAMP else 0, key="mb_tipo_sel")
+    idx_tipo = opcoes_grupo.index(tipo_camp_default) if tipo_camp_default in opcoes_grupo else 0
+    tipo_camp = st.selectbox(
+        "Campanha do grupo",
+        opcoes_grupo,
+        index=idx_tipo,
+        key=f"mb_tipo_sel_{grupo_sel}",
+    )
+    st.session_state["mb_tipo"] = tipo_camp
 
     cfg = TIPOS_CAMP[tipo_camp]
     cor_camp = cfg["cor"]
@@ -3133,7 +3149,9 @@ elif page == "Mailing Builder":
         wheres.append("(c.flg_biometrado IS NULL OR c.flg_biometrado='0')")
 
     if nao_perturbe:
-        wheres.append("(c.flg_nao_perturbe IS NULL OR c.flg_nao_perturbe='0')")
+        # Exclui somente valores explicitamente positivos. Aceita bases que usam
+        # 0/1, SIM/NAO, TRUE/FALSE, S/N ou campo vazio.
+        wheres.append("UPPER(TRIM(COALESCE(CAST(c.flg_nao_perturbe AS VARCHAR),'0'))) NOT IN ('1','SIM','S','TRUE','YES','Y')")
 
     if digital_flt:
         dig_conditions = []
@@ -3236,9 +3254,11 @@ elif page == "Mailing Builder":
                 sql_params.extend(partes)
 
     # WHERE da campanha especifica vem de configuracao interna, nao da interface
-    where_camp = cfg.get("where_extra","")
+    where_camp = clean_text_value(cfg.get("where_extra", ""))
     if where_camp:
-        wheres.append(where_camp.lstrip("AND "))
+        if where_camp.upper().startswith("AND "):
+            where_camp = where_camp[4:].strip()
+        wheres.append(where_camp)
 
     where_sql = " AND ".join(wheres)
     join_op   = cfg.get("join_op","")
@@ -3285,13 +3305,10 @@ elif page == "Mailing Builder":
                  THEN 'sem-car' ELSE 'com-car' END ||
             ', ' || CASE WHEN c.flg_biometrado='1' THEN 'biometrado' ELSE 'nao-biometrado' END AS tags_mailchimp
         FROM main.dim_cliente_hub c
-        JOIN linha_agg la ON c.cnpj=la.cnpj
-        JOIN main.fato_linha_movel l ON c.cnpj=l.cnpj
-          AND l.dt_snapshot=(SELECT MAX(dt_snapshot) FROM main.fato_linha_movel)
+        LEFT JOIN linha_agg la ON c.cnpj=la.cnpj
         LEFT JOIN main.vw_motor_priorizacao_qsc mp ON c.cnpj=mp.cnpj
         {join_op}
         WHERE {where_sql}
-        QUALIFY ROW_NUMBER() OVER (PARTITION BY c.cnpj ORDER BY l.fat_medio DESC) = 1
         ORDER BY {order_by} LIMIT ?
         """
         try:
@@ -3491,6 +3508,7 @@ elif page == "Mailing Builder":
                 "Email Address": df_mail["email"],
                 "First Name": df_mail["primeiro_nome"],
                 "Last Name": df_mail["sobrenome"],
+                "Company": df_mail["nm_cliente"],
                 "Phone": df_mail["telefone"],
                 "Tags": df_mail["tags_mailchimp"],
             })
@@ -3545,8 +3563,11 @@ elif page == "Mailing Builder":
             st.markdown('</div>', unsafe_allow_html=True)
 
     elif gerar:
-        st.markdown("<div class='empty'><div class='empty-text'>Nenhum cliente com esses filtros. Tente ampliar os criterios.</div></div>",
-                    unsafe_allow_html=True)
+        st.markdown(
+            f"<div class='empty'><div class='empty-text'>Nenhum cliente encontrado para <strong>{tipo_camp}</strong> com a combinação atual de filtros.</div>"
+            f"<div style='margin-top:8px;font-size:.78rem;color:var(--muted);'>Revise principalmente situação, Não Perturbe, CAR, biometria, faixa de linhas, maturidade M e regras livres.</div></div>",
+            unsafe_allow_html=True,
+        )
     else:
         st.markdown("<div class='empty'><div class='empty-text'>Configure os filtros e clique em Gerar mailing.</div></div>",
                     unsafe_allow_html=True)
