@@ -1319,6 +1319,40 @@ div[data-baseweb="popover"] > div {
     }
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+   V11 — tagline com efeito de digitação embaixo de "mirai hub"
+   ══════════════════════════════════════════════════════════════════════════════ */
+.mirai-brand-wrap {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+}
+
+.mirai-tagline {
+    color: #655b73;
+    font-size: .74rem;
+    font-weight: 650;
+    letter-spacing: -.01em;
+    min-height: 18px;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    white-space: nowrap;
+}
+
+.typing-cursor {
+    display: inline-block;
+    color: #5b4aa0;
+    font-weight: 900;
+    animation: blinkCursor 1s step-end infinite;
+}
+@keyframes blinkCursor { 50% { opacity: 0; } }
+
+@media (max-width: 980px) {
+    .mirai-tagline { white-space: normal; font-size: .70rem; }
+}
+
 </style>
 """
 
@@ -1366,6 +1400,43 @@ UX_JS = """
     setInterval(observe, 1200);
   }
   setTimeout(boot, 120);
+})();
+</script>
+"""
+
+TYPE_JS = """
+<script>
+(function(){
+  function bootTyping(){
+    var doc = window.parent.document;
+    var el = doc.getElementById("mirai-typing");
+    if(!el || doc.__miraiTypingBooted) return;
+    doc.__miraiTypingBooted = true;
+
+    var text = "Uma visão analítica da carteira";
+    var i = 0;
+    var typing = true;
+
+    function tick(){
+      if(!el){ doc.__miraiTypingBooted = false; return; }
+      if(typing){
+        i = Math.min(i + 1, text.length);
+        el.textContent = text.slice(0, i);
+        if(i >= text.length){ typing = false; setTimeout(tick, 1600); return; }
+      } else {
+        i = Math.max(i - 1, 0);
+        el.textContent = text.slice(0, i);
+        if(i <= 0){ typing = true; setTimeout(tick, 300); return; }
+      }
+      setTimeout(tick, typing ? 65 : 35);
+    }
+    tick();
+  }
+  setTimeout(bootTyping, 250);
+  setInterval(function(){
+    var doc = window.parent.document;
+    if(!doc.__miraiTypingBooted) bootTyping();
+  }, 2500);
 })();
 </script>
 """
@@ -1675,7 +1746,16 @@ def render_nav(options):
         left, mid, right = st.columns([1.05, 3.15, 1.05], vertical_alignment="center")
 
         with left:
-            st.markdown('<div class="mirai-brand">mirai<br><span>hub</span></div>', unsafe_allow_html=True)
+            st.markdown(
+                '<div class="mirai-brand-wrap">'
+                '<div class="mirai-brand">mirai<br><span>hub</span></div>'
+                '<div class="mirai-tagline">'
+                '<span id="mirai-typing">Uma visão analítica da carteira</span>'
+                '<span class="typing-cursor">|</span>'
+                '</div>'
+                '</div>',
+                unsafe_allow_html=True,
+            )
 
         with mid:
             current = st.session_state.get(widget_key, options[0])
@@ -1710,6 +1790,7 @@ def render_nav(options):
 st.markdown(CSS, unsafe_allow_html=True)
 components.html(PARALLAX_JS, height=0, width=0)
 components.html(UX_JS, height=0, width=0)
+components.html(TYPE_JS, height=0, width=0)
 
 NAV = [
     "Visao Geral — Linhas",
@@ -1730,7 +1811,6 @@ if "mailing_df" not in st.session_state: st.session_state["mailing_df"] = None
 if "_nav_pending" not in st.session_state: st.session_state["_nav_pending"] = None
 
 page = render_nav(NAV)
-
 # ══════════════════════════════════════════════════════════════════════════════
 # VISAO GERAL — LINHAS
 # ══════════════════════════════════════════════════════════════════════════════
